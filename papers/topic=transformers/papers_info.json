@@ -1,0 +1,60 @@
+{
+  "1709.09373v1": {
+    "title": "A Bimodal Network Approach to Model Topic Dynamics",
+    "authors": [
+      "Luigi Di Caro",
+      "Marco Guerzoni",
+      "Massimiliano Nuccio",
+      "Giovanni Siragusa"
+    ],
+    "summary": "This paper presents an intertemporal bimodal network to analyze the evolution of the semantic content of a scientific field within the framework of topic modeling, namely using the Latent Dirichlet Allocation (LDA). The main contribution is the conceptualization of the topic dynamics and its formalization and codification into an algorithm. To benchmark the effectiveness of this approach, we propose three indexes which track the transformation of topics over time, their rate of birth and death, and the novelty of their content. Applying the LDA, we test the algorithm both on a controlled experiment and on a corpus of several thousands of scientific papers over a period of more than 100 years which account for the history of the economic thought.",
+    "pdf_url": "https://arxiv.org/pdf/1709.09373v1",
+    "published": "2017-09-27"
+  },
+  "2403.03737v1": {
+    "title": "Probabilistic Topic Modelling with Transformer Representations",
+    "authors": [
+      "Arik Reuter",
+      "Anton Thielmann",
+      "Christoph Weisser",
+      "Benjamin S\u00e4fken",
+      "Thomas Kneib"
+    ],
+    "summary": "Topic modelling was mostly dominated by Bayesian graphical models during the last decade. With the rise of transformers in Natural Language Processing, however, several successful models that rely on straightforward clustering approaches in transformer-based embedding spaces have emerged and consolidated the notion of topics as clusters of embedding vectors. We propose the Transformer-Representation Neural Topic Model (TNTM), which combines the benefits of topic representations in transformer-based embedding spaces and probabilistic modelling. Therefore, this approach unifies the powerful and versatile notion of topics based on transformer embeddings with fully probabilistic modelling, as in models such as Latent Dirichlet Allocation (LDA). We utilize the variational autoencoder (VAE) framework for improved inference speed and modelling flexibility. Experimental results show that our proposed model achieves results on par with various state-of-the-art approaches in terms of embedding coherence while maintaining almost perfect topic diversity. The corresponding source code is available at https://github.com/ArikReuter/TNTM.",
+    "pdf_url": "https://arxiv.org/pdf/2403.03737v1",
+    "published": "2024-03-06"
+  },
+  "2502.11345v1": {
+    "title": "Hierarchical Graph Topic Modeling with Topic Tree-based Transformer",
+    "authors": [
+      "Delvin Ce Zhang",
+      "Menglin Yang",
+      "Xiaobao Wu",
+      "Jiasheng Zhang",
+      "Hady W. Lauw"
+    ],
+    "summary": "Textual documents are commonly connected in a hierarchical graph structure where a central document links to others with an exponentially growing connectivity. Though Hyperbolic Graph Neural Networks (HGNNs) excel at capturing such graph hierarchy, they cannot model the rich textual semantics within documents. Moreover, text contents in documents usually discuss topics of different specificity. Hierarchical Topic Models (HTMs) discover such latent topic hierarchy within text corpora. However, most of them focus on the textual content within documents, and ignore the graph adjacency across interlinked documents. We thus propose a Hierarchical Graph Topic Modeling Transformer to integrate both topic hierarchy within documents and graph hierarchy across documents into a unified Transformer. Specifically, to incorporate topic hierarchy within documents, we design a topic tree and infer a hierarchical tree embedding for hierarchical topic modeling. To preserve both topic and graph hierarchies, we design our model in hyperbolic space and propose Hyperbolic Doubly Recurrent Neural Network, which models ancestral and fraternal tree structure. Both hierarchies are inserted into each Transformer layer to learn unified representations. Both supervised and unsupervised experiments verify the effectiveness of our model.",
+    "pdf_url": "https://arxiv.org/pdf/2502.11345v1",
+    "published": "2025-02-17"
+  },
+  "2206.04317v4": {
+    "title": "Topic-Controllable Summarization: Topic-Aware Evaluation and Transformer Methods",
+    "authors": [
+      "Tatiana Passali",
+      "Grigorios Tsoumakas"
+    ],
+    "summary": "Topic-controllable summarization is an emerging research area with a wide range of potential applications. However, existing approaches suffer from significant limitations. For example, the majority of existing methods built upon recurrent architectures, which can significantly limit their performance compared to more recent Transformer-based architectures, while they also require modifications to the model's architecture for controlling the topic. At the same time, there is currently no established evaluation metric designed specifically for topic-controllable summarization. This work proposes a new topic-oriented evaluation measure to automatically evaluate the generated summaries based on the topic affinity between the generated summary and the desired topic. The reliability of the proposed measure is demonstrated through appropriately designed human evaluation. In addition, we adapt topic embeddings to work with powerful Transformer architectures and propose a novel and efficient approach for guiding the summary generation through control tokens. Experimental results reveal that control tokens can achieve better performance compared to more complicated embedding-based approaches while also being significantly faster.",
+    "pdf_url": "https://arxiv.org/pdf/2206.04317v4",
+    "published": "2022-06-09"
+  },
+  "2103.06434v1": {
+    "title": "Topical Language Generation using Transformers",
+    "authors": [
+      "Rohola Zandie",
+      "Mohammad H. Mahoor"
+    ],
+    "summary": "Large-scale transformer-based language models (LMs) demonstrate impressive capabilities in open text generation. However, controlling the generated text's properties such as the topic, style, and sentiment is challenging and often requires significant changes to the model architecture or retraining and fine-tuning the model on new supervised data. This paper presents a novel approach for Topical Language Generation (TLG) by combining a pre-trained LM with topic modeling information. We cast the problem using Bayesian probability formulation with topic probabilities as a prior, LM probabilities as the likelihood, and topical language generation probability as the posterior. In learning the model, we derive the topic probability distribution from the user-provided document's natural structure. Furthermore, we extend our model by introducing new parameters and functions to influence the quantity of the topical features presented in the generated text. This feature would allow us to easily control the topical properties of the generated text. Our experimental results demonstrate that our model outperforms the state-of-the-art results on coherency, diversity, and fluency while being faster in decoding.",
+    "pdf_url": "https://arxiv.org/pdf/2103.06434v1",
+    "published": "2021-03-11"
+  }
+}

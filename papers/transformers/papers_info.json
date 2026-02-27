@@ -1,0 +1,60 @@
+{
+  "2209.07474v3": {
+    "title": "On the Surprising Effectiveness of Transformers in Low-Labeled Video Recognition",
+    "authors": [
+      "Farrukh Rahman",
+      "\u00d6mer Mubarek",
+      "Zsolt Kira"
+    ],
+    "summary": "Recently vision transformers have been shown to be competitive with convolution-based methods (CNNs) broadly across multiple vision tasks. The less restrictive inductive bias of transformers endows greater representational capacity in comparison with CNNs. However, in the image classification setting this flexibility comes with a trade-off with respect to sample efficiency, where transformers require ImageNet-scale training. This notion has carried over to video where transformers have not yet been explored for video classification in the low-labeled or semi-supervised settings. Our work empirically explores the low data regime for video classification and discovers that, surprisingly, transformers perform extremely well in the low-labeled video setting compared to CNNs. We specifically evaluate video vision transformers across two contrasting video datasets (Kinetics-400 and SomethingSomething-V2) and perform thorough analysis and ablation studies to explain this observation using the predominant features of video transformer architectures. We even show that using just the labeled data, transformers significantly outperform complex semi-supervised CNN methods that leverage large-scale unlabeled data as well. Our experiments inform our recommendation that semi-supervised learning video work should consider the use of video transformers in the future.",
+    "pdf_url": "https://arxiv.org/pdf/2209.07474v3",
+    "published": "2022-09-15"
+  },
+  "2506.22084v1": {
+    "title": "Transformers are Graph Neural Networks",
+    "authors": [
+      "Chaitanya K. Joshi"
+    ],
+    "summary": "We establish connections between the Transformer architecture, originally introduced for natural language processing, and Graph Neural Networks (GNNs) for representation learning on graphs. We show how Transformers can be viewed as message passing GNNs operating on fully connected graphs of tokens, where the self-attention mechanism capture the relative importance of all tokens w.r.t. each-other, and positional encodings provide hints about sequential ordering or structure. Thus, Transformers are expressive set processing networks that learn relationships among input elements without being constrained by apriori graphs. Despite this mathematical connection to GNNs, Transformers are implemented via dense matrix operations that are significantly more efficient on modern hardware than sparse message passing. This leads to the perspective that Transformers are GNNs currently winning the hardware lottery.",
+    "pdf_url": "https://arxiv.org/pdf/2506.22084v1",
+    "published": "2025-06-27"
+  },
+  "2308.07110v1": {
+    "title": "SCSC: Spatial Cross-scale Convolution Module to Strengthen both CNNs and Transformers",
+    "authors": [
+      "Xijun Wang",
+      "Xiaojie Chu",
+      "Chunrui Han",
+      "Xiangyu Zhang"
+    ],
+    "summary": "This paper presents a module, Spatial Cross-scale Convolution (SCSC), which is verified to be effective in improving both CNNs and Transformers. Nowadays, CNNs and Transformers have been successful in a variety of tasks. Especially for Transformers, increasing works achieve state-of-the-art performance in the computer vision community. Therefore, researchers start to explore the mechanism of those architectures. Large receptive fields, sparse connections, weight sharing, and dynamic weight have been considered keys to designing effective base models. However, there are still some issues to be addressed: large dense kernels and self-attention are inefficient, and large receptive fields make it hard to capture local features. Inspired by the above analyses and to solve the mentioned problems, in this paper, we design a general module taking in these design keys to enhance both CNNs and Transformers. SCSC introduces an efficient spatial cross-scale encoder and spatial embed module to capture assorted features in one layer. On the face recognition task, FaceResNet with SCSC can improve 2.7% with 68% fewer FLOPs and 79% fewer parameters. On the ImageNet classification task, Swin Transformer with SCSC can achieve even better performance with 22% fewer FLOPs, and ResNet with CSCS can improve 5.3% with similar complexity. Furthermore, a traditional network (e.g., ResNet) embedded with SCSC can match Swin Transformer's performance.",
+    "pdf_url": "https://arxiv.org/pdf/2308.07110v1",
+    "published": "2023-08-14"
+  },
+  "2010.12698v2": {
+    "title": "Stabilizing Transformer-Based Action Sequence Generation For Q-Learning",
+    "authors": [
+      "Gideon Stein",
+      "Andrey Filchenkov",
+      "Arip Asadulaev"
+    ],
+    "summary": "Since the publication of the original Transformer architecture (Vaswani et al. 2017), Transformers revolutionized the field of Natural Language Processing. This, mainly due to their ability to understand timely dependencies better than competing RNN-based architectures. Surprisingly, this architecture change does not affect the field of Reinforcement Learning (RL), even though RNNs are quite popular in RL, and time dependencies are very common in RL. Recently, Parisotto et al. 2019) conducted the first promising research of Transformers in RL. To support the findings of this work, this paper seeks to provide an additional example of a Transformer-based RL method. Specifically, the goal is a simple Transformer-based Deep Q-Learning method that is stable over several environments. Due to the unstable nature of Transformers and RL, an extensive method search was conducted to arrive at a final method that leverages developments around Transformers as well as Q-learning. The proposed method can match the performance of classic Q-learning on control environments while showing potential on some selected Atari benchmarks. Furthermore, it was critically evaluated to give additional insights into the relation between Transformers and RL.",
+    "pdf_url": "https://arxiv.org/pdf/2010.12698v2",
+    "published": "2020-10-23"
+  },
+  "2201.09873v1": {
+    "title": "Transformers in Medical Imaging: A Survey",
+    "authors": [
+      "Fahad Shamshad",
+      "Salman Khan",
+      "Syed Waqas Zamir",
+      "Muhammad Haris Khan",
+      "Munawar Hayat",
+      "Fahad Shahbaz Khan",
+      "Huazhu Fu"
+    ],
+    "summary": "Following unprecedented success on the natural language tasks, Transformers have been successfully applied to several computer vision problems, achieving state-of-the-art results and prompting researchers to reconsider the supremacy of convolutional neural networks (CNNs) as {de facto} operators. Capitalizing on these advances in computer vision, the medical imaging field has also witnessed growing interest for Transformers that can capture global context compared to CNNs with local receptive fields. Inspired from this transition, in this survey, we attempt to provide a comprehensive review of the applications of Transformers in medical imaging covering various aspects, ranging from recently proposed architectural designs to unsolved issues. Specifically, we survey the use of Transformers in medical image segmentation, detection, classification, reconstruction, synthesis, registration, clinical report generation, and other tasks. In particular, for each of these applications, we develop taxonomy, identify application-specific challenges as well as provide insights to solve them, and highlight recent trends. Further, we provide a critical discussion of the field's current state as a whole, including the identification of key challenges, open problems, and outlining promising future directions. We hope this survey will ignite further interest in the community and provide researchers with an up-to-date reference regarding applications of Transformer models in medical imaging. Finally, to cope with the rapid development in this field, we intend to regularly update the relevant latest papers and their open-source implementations at \\url{https://github.com/fahadshamshad/awesome-transformers-in-medical-imaging}.",
+    "pdf_url": "https://arxiv.org/pdf/2201.09873v1",
+    "published": "2022-01-24"
+  }
+}
