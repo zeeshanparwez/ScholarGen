@@ -1,77 +1,114 @@
-import os
+"""
+NPTEL course retrieval via ChromaDB in-memory vector store.
+
+On first use, pre-computed embeddings are loaded from the Excel seed file into a
+ChromaDB in-memory collection. Subsequent queries hit ChromaDB directly — no manual
+cosine_similarity needed.
+"""
+
 import ast
 import json
-import math
+import os
+from functools import lru_cache
+from typing import List, Optional
+
+import chromadb
 import numpy as np
 import pandas as pd
-from typing import List, Optional
-from functools import lru_cache
 from dotenv import load_dotenv
-
-from sklearn.metrics.pairwise import cosine_similarity
-from sentence_transformers import SentenceTransformer
-from pydantic import BaseModel, Field
 from langchain.tools import StructuredTool
+from pydantic import BaseModel, Field
+from sentence_transformers import SentenceTransformer
 
-load_dotenv("./Config/.env")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, "Config", ".env"))
+
+COURSE_DATA_PATH = os.environ.get(
+    "COURSE_DATA_PATH",
+    os.path.join(BASE_DIR, "Data", "nptel_courses_with_embeddings.xlsx"),
+)
+EMBED_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
+
+
+def _to_array(x) -> np.ndarray:
+    """Convert various embedding formats (ndarray, list, string) to float32 array."""
+    if isinstance(x, np.ndarray):
+        return x.astype(np.float32)
+    if isinstance(x, list):
+        return np.array(x, dtype=np.float32)
+    if isinstance(x, str):
+        try:
+            return np.array(ast.literal_eval(x), dtype=np.float32)
+        except Exception:
+            cleaned = x.strip().lstrip("[").rstrip("]")
+            vals = [float(v) for v in cleaned.split(",") if v.strip()]
+            return np.array(vals, dtype=np.float32)
+    raise ValueError(f"Unsupported embedding type: {type(x)}")
+
+
+@lru_cache(maxsize=1)
+def _get_collection():
+    """
+    Build in-memory ChromaDB collection from the Excel seed file.
+    lru_cache ensures this runs only once per process.
+    """
+    client = chromadb.Client()  # pure in-memory; no disk I/O
+    collection = client.get_or_create_collection(
+        name="nptel_courses",
+        metadata={"hnsw:space": "cosine"},
+    )
+
+    if collection.count() > 0:
+        return collection  # already populated in this session
+
+    if not os.path.exists(COURSE_DATA_PATH):
+        raise FileNotFoundError(f"Course data not found: {COURSE_DATA_PATH}")
+
+    df = pd.read_excel(COURSE_DATA_PATH)
+    if "embedding" not in df.columns:
+        raise KeyError("'embedding' column missing from course data file")
+
+    ids, embeddings, metadatas, documents = [], [], [], []
+    for i, row in df.iterrows():
+        try:
+            emb = _to_array(row["embedding"]).tolist()
+        except Exception:
+            continue  # skip rows with malformed embeddings
+        ids.append(str(i))
+        embeddings.append(emb)
+        documents.append(str(row.get("description", "")))
+        metadatas.append(
+            {
+                "course_name": str(row.get("course_name", "Untitled")),
+                "url": str(row.get("url", "")),
+                "description": str(row.get("description", ""))[:400],
+            }
+        )
+
+    if ids:
+        # Batch insert in chunks of 500 to avoid memory spikes
+        batch = 500
+        for start in range(0, len(ids), batch):
+            collection.add(
+                ids=ids[start : start + batch],
+                embeddings=embeddings[start : start + batch],
+                documents=documents[start : start + batch],
+                metadatas=metadatas[start : start + batch],
+            )
+
+    return collection
+
+
+@lru_cache(maxsize=1)
+def _get_embed_model() -> SentenceTransformer:
+    return SentenceTransformer(EMBED_MODEL)
+
 
 class CourseRetriever:
     """
-    Loads NPTEL course dataset with precomputed embeddings and retrieves top matches.
+    Wraps ChromaDB collection for NPTEL course semantic search.
     """
 
-    def __init__(self,
-                 file_path: str = os.getenv("COURSE_DATA_PATH"),
-                 embed_model: str = "BAAI/bge-base-en-v1.5"):
-        self.file_path = file_path
-        self.embed_model_name = embed_model
-        self._model = None
-        self._courses = None
-
-    # ---------------------------
-    # Properties
-    # ---------------------------
-    @property
-    def model(self):
-        if self._model is None:
-            self._model = SentenceTransformer(self.embed_model_name)
-        return self._model
-
-    @property
-    def courses(self) -> pd.DataFrame:
-        if self._courses is None:
-            if not os.path.exists(self.file_path):
-                raise FileNotFoundError(f"Course file not found: {self.file_path}")
-            df = pd.read_excel(self.file_path)
-            if "embedding" not in df.columns:
-                raise KeyError("Missing 'embedding' column in Excel")
-            df["_emb"] = df["embedding"].apply(self._to_array)
-            self._courses = df
-        return self._courses
-
-    # ---------------------------
-    # Internal helpers
-    # ---------------------------
-    def _to_array(self, x) -> np.ndarray:
-        if isinstance(x, np.ndarray):
-            return x.astype(np.float32)
-        if isinstance(x, list):
-            return np.array(x, dtype=np.float32)
-        if isinstance(x, str):
-            try:
-                return np.array(ast.literal_eval(x), dtype=np.float32)
-            except Exception:
-                cleaned = x.strip().lstrip("[").rstrip("]")
-                vals = [float(v) for v in cleaned.split(",") if v.strip()]
-                return np.array(vals, dtype=np.float32)
-        raise ValueError(f"Unsupported embedding type: {type(x)}")
-
-    def embed_query(self, query: str) -> np.ndarray:
-        return self.model.encode([query], normalize_embeddings=True)[0].astype(np.float32)
-
-    # ---------------------------
-    # Retrieval
-    # ---------------------------
     def retrieve(
         self,
         query: str,
@@ -79,53 +116,63 @@ class CourseRetriever:
         min_similarity: float = 0.15,
         exclude_urls: Optional[List[str]] = None,
     ) -> str:
-        df = self.courses
-        qv = self.embed_query(query)
-        embs = np.vstack(df["_emb"].values)
-        sims = cosine_similarity(qv.reshape(1, -1), embs)[0]
+        collection = _get_collection()
+        model = _get_embed_model()
 
-        if exclude_urls:
-            mask = df["url"].astype(str).isin(set(exclude_urls))
-            sims = np.where(mask.values, -math.inf, sims)
+        query_emb = model.encode([query], normalize_embeddings=True)[0].tolist()
 
-        sims = np.where(sims >= min_similarity, sims, -math.inf)
-
-        top_idx = np.argsort(sims)[-top_k:][::-1]
-        top_idx = [i for i in top_idx if np.isfinite(sims[i])]
-
-        if not top_idx:
-            return f"No strong matches for: **{query}**"
+        n_fetch = min(top_k + len(exclude_urls or []) + 5, collection.count() or 1)
+        results = collection.query(
+            query_embeddings=[query_emb],
+            n_results=n_fetch,
+            include=["metadatas", "distances"],
+        )
 
         lines = [f"### Recommended courses for: **{query}**"]
-        payload = {"query": query, "results": []}
+        payload: dict = {"query": query, "results": []}
+        exclude_set = set(exclude_urls or [])
 
-        for i in top_idx:
-            r = df.iloc[i]
-            name = str(r.get("course_name", "Untitled"))
-            url = str(r.get("url", ""))
-            desc = str(r.get("description", ""))[:250]
-            lines.append(f"- **{name}**\n  {desc}\n  🔗 {url} _(similarity {sims[i]:.3f})_")
+        for meta, dist in zip(results["metadatas"][0], results["distances"][0]):
+            sim = 1.0 - dist  # ChromaDB cosine distance → similarity
+            if sim < min_similarity:
+                continue
+            url = meta.get("url", "")
+            if url in exclude_set:
+                continue
+            name = meta.get("course_name", "Untitled")
+            desc = meta.get("description", "")[:250]
+            lines.append(
+                f"- **{name}**\n  {desc}\n  🔗 {url} _(similarity {sim:.3f})_"
+            )
             payload["results"].append(
                 {
                     "course_name": name,
                     "url": url,
-                    "similarity": float(sims[i]),
-                    "description": str(r.get("description", ""))[:400],
+                    "similarity": sim,
+                    "description": meta.get("description", "")[:400],
                 }
             )
+            if len(payload["results"]) >= top_k:
+                break
+
+        if not payload["results"]:
+            return f"No strong matches for: **{query}**"
 
         lines.append("\n<!-- JSON:" + json.dumps(payload) + " -->")
         return "\n".join(lines)
 
 
-# ==============================
-# LangChain Tool Wrapper
-# ==============================
+# ── LangChain tool wrapper ────────────────────────────────────────────────────
+
 class CourseQuery(BaseModel):
     query: str = Field(..., description="Study topic, e.g., 'python for data science'")
     top_k: int = Field(3, ge=1, le=20, description="Number of courses to return")
-    min_similarity: float = Field(0.15, ge=0.0, le=1.0, description="Min similarity (0-1)")
-    exclude_urls: Optional[List[str]] = Field(default=None, description="Exclude already shown URLs")
+    min_similarity: float = Field(
+        0.15, ge=0.0, le=1.0, description="Minimum similarity threshold (0–1)"
+    )
+    exclude_urls: Optional[List[str]] = Field(
+        default=None, description="URLs to exclude from results"
+    )
 
 
 class CourseTool:
@@ -145,16 +192,17 @@ class CourseTool:
         )
 
     def _find(
-        self, query: str, top_k: int = 3, min_similarity: float = 0.15, exclude_urls=None
+        self,
+        query: str,
+        top_k: int = 3,
+        min_similarity: float = 0.15,
+        exclude_urls: Optional[List[str]] = None,
     ) -> str:
         return self.retriever.retrieve(query, top_k, min_similarity, exclude_urls)
 
 
-# ==============================
-# Test script
-# ==============================
 if __name__ == "__main__":
     retriever = CourseRetriever()
-    print("\n🔎 Testing CourseRetriever...")
+    print("\nTesting CourseRetriever...")
     res = retriever.retrieve("machine learning", top_k=3)
     print(res)

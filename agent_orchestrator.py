@@ -1,6 +1,9 @@
 import asyncio
+import logging
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
+
+logger = logging.getLogger(__name__)
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from langchain_core.tools import BaseTool
@@ -18,10 +21,8 @@ from langgraph.prebuilt import create_react_agent
 # Import your CourseRetriever classes
 from course_retriever import CourseRetriever, CourseTool
 
-load_dotenv("./Config/.env")
-
-# Set your Google API key
-os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY")
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_BASE_DIR, "Config", ".env"))
 
 class MCPToolLogger(BaseTool):
     """MCP tool wrapper with detailed logging."""
@@ -35,25 +36,22 @@ class MCPToolLogger(BaseTool):
         self._tool_name = tool_name
     
     def _run(self, **kwargs) -> str:
-        print(f"\n🔧 TOOL CALLED: {self._tool_name}")
-        print(f"📝 RAW PARAMETERS: {kwargs}")
-        
+        logger.debug("TOOL CALLED: %s | params: %s", self._tool_name, kwargs)
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             result = loop.run_until_complete(self._arun(**kwargs))
-            print(f"✅ TOOL RESULT: {result[:200]}{'...' if len(str(result)) > 200 else ''}")
+            logger.debug("TOOL RESULT (%s): %s", self._tool_name, str(result)[:200])
             return result
         except Exception as e:
             error_msg = f"Error executing {self._tool_name}: {str(e)}"
-            print(f"❌ TOOL ERROR: {error_msg}")
+            logger.error("TOOL ERROR (%s): %s", self._tool_name, error_msg)
             return error_msg
-    
+
     async def _arun(self, **kwargs) -> str:
         try:
             clean_kwargs = self._prepare_arguments(kwargs)
-            print(f"🔄 FINAL PARAMETERS: {clean_kwargs}")
-            
+            logger.debug("TOOL FINAL PARAMS (%s): %s", self._tool_name, clean_kwargs)
             result = await self._session.call_tool(self._tool_name, arguments=clean_kwargs)
             
             if result and result.content:
@@ -108,44 +106,53 @@ class MCPSessionManager:
         self.mcp_tools = []
     
     async def connect_to_servers(self):
-        """Connect to MCP servers and create tools."""
+        """Connect to MCP servers and create tools. Cleans up on partial failure."""
+        _uv = os.environ.get("UV_PATH", "uv")
+        _uvx = os.environ.get("UVX_PATH", "uvx")
         server_configs = [
-            ("research", StdioServerParameters(command="uv", args=["run", "research_mcp.py"])),
-            ("youtube", StdioServerParameters(command="uv", args=["run", "youtube_mcp.py"])),
-            ("fetch", StdioServerParameters(command="uvx", args=["mcp-server-fetch"]))
+            ("research", StdioServerParameters(command=_uv, args=["run", "research_mcp.py"])),
+            ("youtube", StdioServerParameters(command=_uv, args=["run", "youtube_mcp.py"])),
+            ("fetch", StdioServerParameters(command=_uvx, args=["mcp-server-fetch"])),
         ]
-        
-        print("🚀 Connecting to MCP servers...")
-        
-        for server_name, server_params in server_configs:
-            try:
-                stdio_transport = await self.exit_stack.enter_async_context(
-                    stdio_client(server_params)
-                )
-                read, write = stdio_transport
-                session = await self.exit_stack.enter_async_context(
-                    ClientSession(read, write)
-                )
-                await session.initialize()
-                
-                self.sessions[server_name] = session
-                tools_response = await session.list_tools()
-                
-                for tool in tools_response.tools:
-                    wrapped_tool = MCPToolLogger(
-                        tool_name=tool.name,
-                        tool_description=tool.description or f"MCP tool: {tool.name}",
-                        session=session
+
+        logger.info("Connecting to MCP servers...")
+
+        try:
+            for server_name, server_params in server_configs:
+                try:
+                    stdio_transport = await self.exit_stack.enter_async_context(
+                        stdio_client(server_params)
                     )
-                    self.mcp_tools.append(wrapped_tool)
-                
-                print(f"✅ Connected to {server_name}: {[t.name for t in tools_response.tools]}")
-                
-            except Exception as e:
-                print(f"❌ Failed to connect to {server_name}: {e}")
-        
+                    read, write = stdio_transport
+                    session = await self.exit_stack.enter_async_context(
+                        ClientSession(read, write)
+                    )
+                    await session.initialize()
+
+                    self.sessions[server_name] = session
+                    tools_response = await session.list_tools()
+
+                    for tool in tools_response.tools:
+                        wrapped_tool = MCPToolLogger(
+                            tool_name=tool.name,
+                            tool_description=tool.description or f"MCP tool: {tool.name}",
+                            session=session,
+                        )
+                        self.mcp_tools.append(wrapped_tool)
+
+                    logger.info("Connected to %s: %s", server_name, [t.name for t in tools_response.tools])
+
+                except Exception as e:
+                    logger.warning("Failed to connect to %s: %s", server_name, e)
+                    # Non-fatal: continue with remaining servers
+
+        except Exception:
+            # Fatal error — release all contexts already entered
+            await self.exit_stack.aclose()
+            raise
+
         return self.mcp_tools
-    
+
     async def cleanup(self):
         await self.exit_stack.aclose()
 
@@ -154,9 +161,9 @@ class ChatbotWithMemory:
     
     def __init__(self, tools: List[BaseTool]):
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
+            model=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
             temperature=0.7,
-            max_retries=2
+            max_retries=2,
         )
         self.tools = tools
         
@@ -217,12 +224,12 @@ Remember: Every student learns differently. Do not ask quesions before answering
         # Thread configuration for memory
         self.thread_config = {"configurable": {"thread_id": "main_conversation"}}
         
-        print("🧠 Memory system initialized with persistent checkpointing")
+        logger.info("Memory system initialized with persistent checkpointing")
     
     async def chat(self, user_input: str) -> str:
         """Send a message and get response with memory context."""
         try:
-            print(f"\n💭 Processing with memory context...")
+            logger.debug("Processing with memory context...")
             
             # Invoke the agent with memory
             response = await self.agent.ainvoke(
@@ -254,7 +261,7 @@ Remember: Every student learns differently. Do not ask quesions before answering
             
             return history
         except Exception as e:
-            print(f"Error getting history: {e}")
+            logger.error("Error getting history: %s", e)
             return []
     
     def clear_memory(self):
@@ -264,9 +271,9 @@ Remember: Every student learns differently. Do not ask quesions before answering
             import uuid
             new_thread_id = str(uuid.uuid4())
             self.thread_config = {"configurable": {"thread_id": new_thread_id}}
-            print("🗑️ Memory cleared - starting fresh conversation")
+            logger.info("Memory cleared - starting fresh conversation")
         except Exception as e:
-            print(f"Error clearing memory: {e}")
+            logger.error("Error clearing memory: %s", e)
 
 async def setup_all_tools():
     """Setup both MCP tools and CourseRetriever tool."""
@@ -274,20 +281,19 @@ async def setup_all_tools():
     mcp_tools = await session_manager.connect_to_servers()
     
     # Setup CourseRetriever tool
-    print("🎓 Initializing NPTEL CourseRetriever...")
+    logger.info("Initializing NPTEL CourseRetriever...")
     try:
         course_retriever = CourseRetriever()
         course_tool_wrapper = CourseTool(course_retriever)
         course_tool = course_tool_wrapper.tool()
-        print("✅ CourseRetriever initialized successfully")
-        
+        logger.info("CourseRetriever initialized successfully")
         all_tools = mcp_tools + [course_tool]
-        print(f"🛠️ Total tools available: {[tool.name for tool in all_tools]}")
+        logger.info("Total tools available: %s", [tool.name for tool in all_tools])
         
         return all_tools, session_manager
         
     except Exception as e:
-        print(f"❌ Failed to initialize CourseRetriever: {e}")
+        logger.warning("Failed to initialize CourseRetriever: %s", e)
         return mcp_tools, session_manager
 
 async def main():

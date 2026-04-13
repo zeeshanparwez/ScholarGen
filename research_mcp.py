@@ -1,96 +1,130 @@
-import arxiv
+# /// script
+# dependencies = ["arxiv", "chromadb", "fastmcp", "mcp"]
+# ///
+"""
+arXiv MCP server — paper search and retrieval backed by ChromaDB in-memory store.
+
+Replaces the per-topic papers/<topic>/papers_info.json file tree.
+All papers are stored in a single flat ChromaDB collection that lives for the
+lifetime of the MCP subprocess (one chat session).
+"""
+
 import json
 import os
 from typing import List
+
+import arxiv
+import chromadb
 from mcp.server.fastmcp import FastMCP
 
-PAPER_DIR = "papers"
-
-# Initialize FastMCP server
 mcp = FastMCP("research")
+
+# Initialise once at subprocess startup — persists across all tool calls.
+_client = chromadb.Client()  # pure in-memory
+_papers = _client.get_or_create_collection(
+    name="papers",
+    metadata={"hnsw:space": "cosine"},
+)
+
 
 @mcp.tool()
 def search_papers(topic: str, max_results: int = 5) -> List[str]:
     """
-    Search for papers on arXiv based on a topic and store their information.
-    
+    Search arXiv for papers on a topic and store them in the in-memory RAG store.
+
     Args:
-        topic: The topic to search for
-        max_results: Maximum number of results to retrieve (default: 5)
-        
+        topic: The research topic to search for.
+        max_results: How many results to fetch from arXiv (default 5).
+
     Returns:
-        List of paper IDs found in the search
+        List of arXiv paper IDs found.
     """
-    
-    # Use arxiv to find the papers 
-    client = arxiv.Client()
-    # Search for the most relevant articles matching the queried topic
     search = arxiv.Search(
-        query = topic,
-        max_results = max_results,
-        sort_by = arxiv.SortCriterion.Relevance
+        query=topic,
+        max_results=max_results,
+        sort_by=arxiv.SortCriterion.Relevance,
     )
-    papers = client.results(search)
-    
-    # Create directory for this topic
-    path = os.path.join(PAPER_DIR, topic.lower().replace(" ", "_"))
-    os.makedirs(path, exist_ok=True)
-    
-    file_path = os.path.join(path, "papers_info.json")
-    # Try to load existing papers info
-    try:
-        with open(file_path, "r") as json_file:
-            papers_info = json.load(json_file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        papers_info = {}
-    # Process each paper and add to papers_info  
-    paper_ids = []
-    for paper in papers:
-        paper_ids.append(paper.get_short_id())
-        paper_info = {
-            'title': paper.title,
-            'authors': [author.name for author in paper.authors],
-            'summary': paper.summary,
-            'pdf_url': paper.pdf_url,
-            'published': str(paper.published.date())
-        }
-        papers_info[paper.get_short_id()] = paper_info
-    
-    # Save updated papers_info to json file
-    with open(file_path, "w") as json_file:
-        json.dump(papers_info, json_file, indent=2)
-    
-    print(f"Results are saved in: {file_path}")
-    
+
+    paper_ids: List[str] = []
+    ids_to_add, docs_to_add, metas_to_add = [], [], []
+
+    for paper in arxiv.Client().results(search):
+        pid = paper.get_short_id()
+        paper_ids.append(pid)
+
+        # Skip papers already in the collection (idempotent)
+        if _papers.get(ids=[pid])["ids"]:
+            continue
+
+        ids_to_add.append(pid)
+        # Combine title + summary as the searchable document text
+        docs_to_add.append(f"{paper.title}. {paper.summary}")
+        metas_to_add.append(
+            {
+                "title": paper.title,
+                "authors": ", ".join(a.name for a in paper.authors),
+                "summary": paper.summary[:500],
+                "pdf_url": paper.pdf_url or "",
+                "published": str(paper.published.date()),
+                "topic": topic,
+            }
+        )
+
+    if ids_to_add:
+        _papers.add(
+            ids=ids_to_add,
+            documents=docs_to_add,
+            metadatas=metas_to_add,
+        )
+
     return paper_ids
+
 
 @mcp.tool()
 def extract_info(paper_id: str) -> str:
     """
-    Search for information about a specific paper across all topic directories.
-    
+    Retrieve stored metadata for a specific paper by its arXiv ID.
+
     Args:
-        paper_id: The ID of the paper to look for
-        
+        paper_id: The short arXiv ID (e.g. '2301.07041').
+
     Returns:
-        JSON string with paper information if found, error message if not found
+        JSON string with paper metadata, or an error message if not found.
     """
-    for item in os.listdir(PAPER_DIR):
-        item_path = os.path.join(PAPER_DIR, item)
-        if os.path.isdir(item_path):
-            file_path = os.path.join(item_path, "papers_info.json")
-            if os.path.isfile(file_path):
-                try:
-                    with open(file_path, "r") as json_file:
-                        papers_info = json.load(json_file)
-                        if paper_id in papers_info:
-                            return json.dumps(papers_info[paper_id], indent=2)
-                except (FileNotFoundError, json.JSONDecodeError) as e:
-                    print(f"Error reading {file_path}: {str(e)}")
-                    continue
-    
-    return f"There's no saved information related to paper {paper_id}."
+    result = _papers.get(ids=[paper_id], include=["metadatas"])
+    if result["ids"]:
+        return json.dumps(result["metadatas"][0], indent=2)
+    return f"No saved information for paper '{paper_id}'."
+
+
+@mcp.tool()
+def search_cached_papers(query: str, n_results: int = 5) -> str:
+    """
+    Semantically search all previously fetched papers in this session.
+
+    Args:
+        query: A natural language query (e.g. 'attention mechanisms in vision').
+        n_results: Number of results to return (default 5).
+
+    Returns:
+        JSON string with matching papers and their metadata.
+    """
+    total = _papers.count()
+    if total == 0:
+        return "No papers cached yet. Use search_papers first."
+
+    results = _papers.query(
+        query_texts=[query],
+        n_results=min(n_results, total),
+        include=["metadatas", "distances"],
+    )
+
+    output = []
+    for meta, dist in zip(results["metadatas"][0], results["distances"][0]):
+        output.append({"similarity": round(1.0 - dist, 4), **meta})
+
+    return json.dumps(output, indent=2)
+
 
 if __name__ == "__main__":
-    # Initialize and run the server
-    mcp.run(transport='stdio')
+    mcp.run(transport="stdio")

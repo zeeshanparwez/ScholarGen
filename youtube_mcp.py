@@ -1,3 +1,6 @@
+# /// script
+# dependencies = ["youtube-transcript-api", "fastmcp", "mcp"]
+# ///
 import json
 import re
 from typing import Dict, List

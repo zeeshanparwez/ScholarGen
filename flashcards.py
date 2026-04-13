@@ -1,17 +1,16 @@
 """
-flashcards.py - GATE Exam Flashcard Generator using Gemini LLM
-Complete implementation with modal dialog support for Streamlit
+flashcards.py — GATE exam flashcard generator (pure Python, no UI dependencies).
+Used directly by the FastAPI backend router.
 """
 
 import json
-import streamlit as st
+import os
 from typing import List, Dict
 from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv("./Config/.env")
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "Config", ".env"))
 
 # ============== GATE SPECIALIZATIONS CONFIG ==============
 
@@ -150,9 +149,14 @@ class GATEFlashcardGenerator:
     
     def __init__(self):
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
-            temperature=0.3,  # Lower temperature for consistent exam questions
-            max_retries=2
+            model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
+            temperature=0.3,
+            max_retries=2,
+            model_kwargs={
+                "generation_config": {
+                    "thinking_config": {"thinking_budget": 0}
+                }
+            },
         )
     
     def generate_flashcards(
@@ -176,17 +180,31 @@ class GATEFlashcardGenerator:
         """
         
         prompt = self._build_prompt(specialization, subject, topic, num_questions)
-        
-        try:
-            message = HumanMessage(content=prompt)
-            response = self.llm.invoke([message])
-            
-            flashcards = self._parse_response(response.content)
-            return flashcards
-            
-        except Exception as e:
-            print(f"Flashcard generation error: {e}")
-            return []
+        max_retries = 2
+
+        for attempt in range(max_retries):
+            try:
+                import signal
+
+                def _timeout_handler(signum, frame):
+                    raise TimeoutError("Flashcard generation timed out")
+
+                signal.signal(signal.SIGALRM, _timeout_handler)
+                signal.alarm(30)  # 30-second hard timeout
+                try:
+                    response = self.llm.invoke([HumanMessage(content=prompt)])
+                finally:
+                    signal.alarm(0)  # cancel alarm
+
+                flashcards = self._parse_response(response.content)
+                if flashcards:
+                    return flashcards
+            except TimeoutError:
+                print(f"Flashcard generation timed out (attempt {attempt + 1}/{max_retries})")
+            except Exception as e:
+                print(f"Flashcard generation error (attempt {attempt + 1}/{max_retries}): {e}")
+
+        return []
     
     def _build_prompt(self, specialization: str, subject: str, topic: str, num: int) -> str:
         """Build structured prompt for Gemini"""
@@ -278,9 +296,9 @@ Generate {num} questions now in this exact JSON format."""
         return True
 
 
-# ============== STREAMLIT MODAL DIALOG ==============
+# Streamlit modal removed — UI is now handled by the React frontend.
+# The backend router (backend/routers/flashcards.py) uses GATEFlashcardGenerator directly.
 
-@st.dialog("GATE Flashcard Practice", width="small")
 def show_flashcard_modal():
     """Display flashcard generation and practice in a modal dialog"""
 
