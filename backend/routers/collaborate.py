@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from backend.dependencies import get_current_user
-from collaboration import match_similar_users, suggest_collaboration_topics
+from backend.core.collaboration import match_similar_users, suggest_collaboration_topics
 
 router = APIRouter()
 

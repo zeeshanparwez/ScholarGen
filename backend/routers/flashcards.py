@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from backend.dependencies import get_current_user
-from flashcards import GATEFlashcardGenerator, GATE_SPECIALIZATIONS, get_subjects
+from backend.core.flashcards import GATEFlashcardGenerator, GATE_SPECIALIZATIONS, get_subjects
 
 router = APIRouter()
 _generator = GATEFlashcardGenerator()

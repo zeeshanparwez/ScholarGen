@@ -16,8 +16,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
-from agent_orchestrator import MCPSessionManager
-from course_retriever import CourseRetriever, CourseTool
+from backend.agent_orchestrator import MCPSessionManager
+from backend.core.course_retriever import CourseRetriever, CourseTool
 
 _BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv(os.path.join(_BASE, "Config", ".env"))

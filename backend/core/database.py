@@ -14,7 +14,9 @@ from contextlib import contextmanager
 
 import bcrypt
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Project root is 2 levels up from this file (backend/core/ → backend/ → ScholarGen/)
+_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(_FILE_DIR))
 
 # Override with SCHOLARGEN_DB_PATH env var to use ":memory:" or a custom path.
 DB_PATH = os.environ.get(

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from backend.dependencies import get_current_user
-from course_retriever import CourseRetriever
+from backend.core.course_retriever import CourseRetriever
 
 router = APIRouter()
 _retriever = CourseRetriever()

@@ -20,7 +20,9 @@ from langchain.tools import StructuredTool
 from pydantic import BaseModel, Field
 from sentence_transformers import SentenceTransformer
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Project root is 2 levels up from this file (backend/core/ → backend/ → ScholarGen/)
+_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(_FILE_DIR))
 load_dotenv(os.path.join(BASE_DIR, "Config", ".env"))
 
 COURSE_DATA_PATH = os.environ.get(

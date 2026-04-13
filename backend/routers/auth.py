@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from database import create_user, verify_user
+from backend.core.database import create_user, verify_user
 from backend.jwt_utils import create_token
 
 router = APIRouter()

@@ -8,9 +8,11 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from database import get_all_profiles, get_profile, upsert_profile
+from backend.core.database import get_all_profiles, get_profile, upsert_profile
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Project root is 2 levels up from this file (backend/core/ → backend/ → ScholarGen/)
+_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(_FILE_DIR))
 load_dotenv(os.path.join(BASE_DIR, "Config", ".env"))
 
 embedding_model = SentenceTransformer(
@@ -18,7 +20,7 @@ embedding_model = SentenceTransformer(
 )
 
 llm = ChatGoogleGenerativeAI(
-    model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
+    model=os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview"),
     temperature=0.7,
     max_retries=2,
     model_kwargs={

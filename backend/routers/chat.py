@@ -6,8 +6,8 @@ from pydantic import BaseModel
 
 from backend.dependencies import get_current_user
 from backend.services.chatbot_service import chatbot_service
-from database import upsert_profile
-from collaboration import extract_profile_from_text
+from backend.core.database import upsert_profile
+from backend.core.collaboration import extract_profile_from_text
 
 router = APIRouter()
 
