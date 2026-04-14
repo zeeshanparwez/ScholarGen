@@ -133,8 +133,10 @@ export const collaborate = {
 // ── Profile ───────────────────────────────────────────────────────────────────
 
 export const profile = {
-  get: () => request('/profile'),
-  update: (data) => request('/profile', { method: 'PUT', body: JSON.stringify(data) }),
+  get:         ()     => request('/profile'),
+  update:      (data) => request('/profile', { method: 'PUT', body: JSON.stringify(data) }),
+  streak:      ()     => request('/profile/streak', { method: 'POST' }),
+  generateBio: ()     => request('/profile/generate-bio', { method: 'POST' }),
 }
 
 // ── Learning Path ─────────────────────────────────────────────────────────────
@@ -145,4 +147,31 @@ export const learningpath = {
       method: 'POST',
       body: JSON.stringify({ current_role, target_role, job_description }),
     }),
+}
+
+// ── Bookmarks ─────────────────────────────────────────────────────────────────
+
+export const bookmarks = {
+  list:   ()         => request('/bookmarks'),
+  add:    (content)  => request('/bookmarks', { method: 'POST', body: JSON.stringify({ content }) }),
+  remove: (id)       => request(`/bookmarks/${id}`, { method: 'DELETE' }),
+}
+
+// ── Progress tracker ──────────────────────────────────────────────────────────
+
+export const progress = {
+  list:   ()                          => request('/progress'),
+  check:  (item_url)                  => request(`/progress/check?item_url=${encodeURIComponent(item_url)}`),
+  add:    (item_type, item_url, title, status = 'saved') =>
+    request('/progress', { method: 'POST', body: JSON.stringify({ item_type, item_url, title, status }) }),
+  update: (id, status)                => request(`/progress/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  remove: (id)                        => request(`/progress/${id}`, { method: 'DELETE' }),
+}
+
+// ── Career tools ──────────────────────────────────────────────────────────────
+
+export const career = {
+  analyze:       (text, mode)         => request('/career/analyze',         { method: 'POST', body: JSON.stringify({ text, mode }) }),
+  coverLetter:   (jd_text, notes='') => request('/career/cover-letter',    { method: 'POST', body: JSON.stringify({ jd_text, notes }) }),
+  playlistGuide: (urls)               => request('/career/playlist-guide',  { method: 'POST', body: JSON.stringify({ urls }) }),
 }

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Wrench, Search, Globe, Youtube, Database, BookOpen, BookMarked, Zap, ChevronDown } from 'lucide-react'
+import { Loader2, Wrench, Search, Globe, Youtube, Database, BookOpen, BookMarked, Zap, ChevronDown, Timer } from 'lucide-react'
 
 const TOOL_META = {
   find_nptel_courses:   { label: 'Searching NPTEL courses',  icon: BookOpen  },
@@ -20,7 +20,11 @@ import CollaboratePanel from '../components/CollaboratePanel'
 import LearningPathPanel from '../components/LearningPathPanel'
 import ProfilePanel from '../components/ProfilePanel'
 import OnboardingModal from '../components/OnboardingModal'
-import { chat } from '../api'
+import CareerPanel from '../components/CareerPanel'
+import BookmarksPanel from '../components/BookmarksPanel'
+import ProgressPanel from '../components/ProgressPanel'
+import PomodoroTimer from '../components/PomodoroTimer'
+import { chat, profile as profileApi } from '../api'
 
 const PROVIDERS = [
   { id: 'gemini',        label: 'Gemini',    sub: 'gemini-3.1-flash-lite-preview',  color: 'text-blue-600',   tools: true  },
@@ -59,6 +63,8 @@ export default function ChatPage() {
     () => localStorage.getItem('upskill_provider') || 'gemini'
   )
   const [providerOpen, setProviderOpen] = useState(false)
+  const [showPomodoro, setShowPomodoro] = useState(false)
+  const [streak, setStreak] = useState(0)
   const bottomRef = useRef(null)
   const providerRef = useRef(null)
   const navigate = useNavigate()
@@ -67,6 +73,13 @@ export default function ChatPage() {
   const [showOnboarding, setShowOnboarding] = useState(
     !localStorage.getItem('upskill_onboarded')
   )
+
+  // Record daily activity and fetch streak on mount
+  useEffect(() => {
+    profileApi.streak()
+      .then(d => setStreak(d.streak ?? 0))
+      .catch(() => {})
+  }, [])
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -159,9 +172,10 @@ export default function ChatPage() {
         onLogout={logout}
         username={username}
         toolsActive={activeTools}
+        streak={streak}
       />
 
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 relative">
         {/* ── CHAT PANEL ── */}
         {panel === 'chat' && (
           <>
@@ -235,6 +249,14 @@ export default function ChatPage() {
                 </div>
 
                 <button
+                  onClick={() => setShowPomodoro(p => !p)}
+                  className={`p-1.5 rounded-lg transition-colors ${showPomodoro ? 'bg-accent-50 text-accent-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+                  title="Pomodoro timer"
+                >
+                  <Timer size={15} />
+                </button>
+
+                <button
                   onClick={clearChat}
                   className="btn-ghost text-xs py-1.5 px-3 text-gray-500"
                   disabled={streaming}
@@ -243,6 +265,13 @@ export default function ChatPage() {
                 </button>
               </div>
             </div>
+
+            {/* Floating Pomodoro Timer */}
+            {showPomodoro && (
+              <div className="absolute top-16 right-4 z-40">
+                <PomodoroTimer onClose={() => setShowPomodoro(false)} />
+              </div>
+            )}
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto">
@@ -282,6 +311,9 @@ export default function ChatPage() {
         {panel === 'papers'       && <PapersPanel />}
         {panel === 'flashcards'   && <FlashcardsPanel />}
         {panel === 'collaborate'  && <CollaboratePanel />}
+        {panel === 'career'       && <CareerPanel onNavigate={setPanel} />}
+        {panel === 'bookmarks'    && <BookmarksPanel />}
+        {panel === 'progress'     && <ProgressPanel />}
       </main>
     </div>
   )

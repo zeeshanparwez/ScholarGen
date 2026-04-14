@@ -1,4 +1,5 @@
-import { Zap, MessageSquare, BookOpen, FileText, Users, LogOut, ChevronRight, Search, Globe, Youtube, Database, BookMarked, Map, User } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Zap, MessageSquare, BookOpen, FileText, Users, LogOut, ChevronRight, Search, Globe, Youtube, Database, BookMarked, Map, User, Briefcase, Bookmark, CheckSquare, Moon, Sun, Flame } from 'lucide-react'
 import clsx from 'clsx'
 
 const TOOL_META = {
@@ -12,15 +13,35 @@ const TOOL_META = {
 
 const NAV = [
   { id: 'chat',         label: 'AI Assistant',      icon: MessageSquare },
-  { id: 'learningpath', label: 'Learning Path',      icon: Map },
-  { id: 'courses',      label: 'Course Library',     icon: BookOpen },
-  { id: 'papers',       label: 'Industry Insights',  icon: FileText },
-  { id: 'flashcards',   label: 'Skill Assessment',   icon: Zap },
-  { id: 'collaborate',  label: 'Talent Network',     icon: Users },
-  { id: 'profile',      label: 'My Profile',         icon: User },
+  { id: 'learningpath', label: 'Learning Path',      icon: Map           },
+  { id: 'career',       label: 'Career Tools',       icon: Briefcase     },
+  { id: 'courses',      label: 'Course Library',     icon: BookOpen      },
+  { id: 'papers',       label: 'Industry Insights',  icon: FileText      },
+  { id: 'flashcards',   label: 'Skill Assessment',   icon: Zap           },
+  { id: 'progress',     label: 'Learning Tracker',   icon: CheckSquare   },
+  { id: 'bookmarks',    label: 'Saved Responses',    icon: Bookmark      },
+  { id: 'collaborate',  label: 'Talent Network',     icon: Users         },
+  { id: 'profile',      label: 'My Profile',         icon: User          },
 ]
 
-export default function Sidebar({ activePanel, onNavigate, onLogout, username, toolsActive }) {
+function useDarkMode() {
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem('upskill_dark')
+    return saved === 'true'
+  })
+
+  useEffect(() => {
+    if (dark) document.documentElement.classList.add('dark')
+    else document.documentElement.classList.remove('dark')
+    localStorage.setItem('upskill_dark', dark)
+  }, [dark])
+
+  return [dark, setDark]
+}
+
+export default function Sidebar({ activePanel, onNavigate, onLogout, username, toolsActive, streak = 0 }) {
+  const [dark, setDark] = useDarkMode()
+
   return (
     <aside className="w-60 shrink-0 flex flex-col bg-gray-50 border-r border-gray-200 h-full">
       {/* Logo */}
@@ -29,6 +50,13 @@ export default function Sidebar({ activePanel, onNavigate, onLogout, username, t
           <Zap size={18} className="text-white" strokeWidth={2} />
         </div>
         <span className="font-semibold text-gray-900 tracking-tight">UpskillOS</span>
+        <button
+          onClick={() => setDark(d => !d)}
+          className="ml-auto text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100"
+          title={dark ? 'Light mode' : 'Dark mode'}
+        >
+          {dark ? <Sun size={14} /> : <Moon size={14} />}
+        </button>
       </div>
 
       {/* Navigation */}
@@ -80,6 +108,13 @@ export default function Sidebar({ activePanel, onNavigate, onLogout, username, t
 
       {/* User + logout */}
       <div className="px-3 py-3 border-t border-gray-200">
+        {/* Streak */}
+        {streak > 0 && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 mb-1">
+            <Flame size={13} className="text-orange-500" />
+            <span className="text-xs font-semibold text-orange-500">{streak} day streak</span>
+          </div>
+        )}
         <div className="flex items-center gap-3 px-3 py-2">
           <div className="w-7 h-7 rounded-full bg-accent-100 text-accent-700 flex items-center justify-center text-xs font-semibold shrink-0">
             {username?.[0]?.toUpperCase() ?? 'U'}

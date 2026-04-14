@@ -61,3 +61,36 @@
 .prose-chat table { width: 100%; border-collapse: collapse; font-size: 0.875em; margin: 0.75em 0; }
 .prose-chat th, .prose-chat td { border: 1px solid #e5e7eb; padding: 0.5em 0.75em; }
 .prose-chat th { background: #f9fafb; font-weight: 600; }
+
+/* ── Dark mode ────────────────────────────────────────────────────────────── */
+.dark body                                    { background-color: #111827; color: #f3f4f6; }
+.dark .bg-white                               { background-color: #1f2937; }
+.dark .bg-gray-50                             { background-color: #111827; }
+.dark .bg-gray-100                            { background-color: #374151; }
+.dark .bg-gray-200                            { background-color: #4b5563; }
+.dark .text-gray-900                          { color: #f9fafb; }
+.dark .text-gray-800                          { color: #e5e7eb; }
+.dark .text-gray-700                          { color: #d1d5db; }
+.dark .text-gray-600                          { color: #9ca3af; }
+.dark .text-gray-500                          { color: #6b7280; }
+.dark .text-gray-400                          { color: #6b7280; }
+.dark .border-gray-50,
+.dark .border-gray-100,
+.dark .border-gray-200                        { border-color: #374151; }
+.dark .card                                   { background-color: #1f2937; border-color: #374151; box-shadow: none; }
+.dark .input-field                            { background-color: #374151; border-color: #4b5563; color: #f3f4f6; }
+.dark .input-field::placeholder               { color: #6b7280; }
+.dark .btn-ghost                              { color: #d1d5db; }
+.dark .btn-ghost:hover                        { background-color: #374151; }
+.dark .shadow-sm, .dark .shadow-lg            { --tw-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4); }
+.dark .hover\:bg-gray-50:hover                { background-color: #1f2937; }
+.dark .hover\:bg-gray-100:hover               { background-color: #374151; }
+.dark .focus-within\:ring-2                   { --tw-ring-color: rgba(99,102,241,0.3); }
+.dark .prose-chat code                        { background: #374151; color: #e5e7eb; }
+.dark .prose-chat th                          { background: #374151; }
+.dark .prose-chat th, .dark .prose-chat td    { border-color: #4b5563; }
+.dark .prose-chat blockquote                  { border-color: #4b5563; color: #9ca3af; }
+.dark .prose-chat hr                          { border-color: #374151; }
+.dark .prose-chat a                           { color: #818cf8; }
+.dark ::-webkit-scrollbar-thumb              { background: #4b5563; }
+.dark ::-webkit-scrollbar-thumb:hover        { background: #6b7280; }

@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { GraduationCap, Volume2, VolumeX } from 'lucide-react'
+import { GraduationCap, Volume2, VolumeX, Bookmark, BookmarkCheck } from 'lucide-react'
 import clsx from 'clsx'
+import { bookmarks } from '../api'
 
 function useSpeech() {
   const [speaking, setSpeaking] = useState(false)
@@ -14,7 +15,6 @@ function useSpeech() {
       setSpeaking(false)
       return
     }
-    // Strip markdown syntax for cleaner speech
     const plain = text
       .replace(/[*_`#>~]/g, '')
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
@@ -36,6 +36,18 @@ function useSpeech() {
 export default function ChatMessage({ role, content, streaming }) {
   const isUser = role === 'user'
   const { speaking, speak } = useSpeech()
+  const [bookmarked, setBookmarked] = useState(false)
+  const [bookmarking, setBookmarking] = useState(false)
+
+  const saveBookmark = useCallback(async () => {
+    if (bookmarked || bookmarking || !content) return
+    setBookmarking(true)
+    try {
+      await bookmarks.add(content)
+      setBookmarked(true)
+    } catch { /* non-critical */ }
+    finally { setBookmarking(false) }
+  }, [bookmarked, bookmarking, content])
 
   return (
     <div className={clsx('flex gap-3 px-4 py-3 group', isUser && 'flex-row-reverse')}>
@@ -74,22 +86,40 @@ export default function ChatMessage({ role, content, streaming }) {
           )}
         </div>
 
-        {/* Speak button — assistant only, shown on hover, hidden while streaming */}
+        {/* Action buttons — assistant only, on hover, hidden while streaming */}
         {!isUser && !streaming && content && (
-          <button
-            onClick={() => speak(content)}
-            title={speaking ? 'Stop speaking' : 'Read aloud'}
-            className={clsx(
-              'mt-1 ml-1 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full transition-all',
-              'opacity-0 group-hover:opacity-100',
-              speaking
-                ? 'bg-accent-100 text-accent-700 opacity-100'
-                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-            )}
-          >
-            {speaking ? <VolumeX size={11} /> : <Volume2 size={11} />}
-            <span>{speaking ? 'Stop' : 'Speak'}</span>
-          </button>
+          <div className="mt-1 ml-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Speak */}
+            <button
+              onClick={() => speak(content)}
+              title={speaking ? 'Stop speaking' : 'Read aloud'}
+              className={clsx(
+                'flex items-center gap-1 text-xs px-2 py-0.5 rounded-full transition-all',
+                speaking
+                  ? 'bg-accent-100 text-accent-700 opacity-100'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              )}
+            >
+              {speaking ? <VolumeX size={11} /> : <Volume2 size={11} />}
+              <span>{speaking ? 'Stop' : 'Speak'}</span>
+            </button>
+
+            {/* Bookmark */}
+            <button
+              onClick={saveBookmark}
+              disabled={bookmarked || bookmarking}
+              title={bookmarked ? 'Bookmarked' : 'Save to bookmarks'}
+              className={clsx(
+                'flex items-center gap-1 text-xs px-2 py-0.5 rounded-full transition-all',
+                bookmarked
+                  ? 'bg-amber-50 text-amber-600 opacity-100'
+                  : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50'
+              )}
+            >
+              {bookmarked ? <BookmarkCheck size={11} /> : <Bookmark size={11} />}
+              <span>{bookmarked ? 'Saved' : 'Save'}</span>
+            </button>
+          </div>
         )}
       </div>
     </div>

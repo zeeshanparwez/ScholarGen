@@ -1,13 +1,34 @@
-import { useState } from 'react'
-import { Search, ExternalLink, FileText, Loader2, Users } from 'lucide-react'
-import { papers } from '../api'
+import { useState, useEffect } from 'react'
+import { Search, ExternalLink, FileText, Loader2, Users, BookmarkPlus, BookmarkCheck } from 'lucide-react'
+import clsx from 'clsx'
+import { papers, progress as progressApi } from '../api'
+
+const STATUS_META = {
+  saved:       { label: 'Saved',       color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  in_progress: { label: 'In Progress', color: 'bg-blue-50 text-blue-700 border-blue-200'    },
+  done:        { label: 'Done',        color: 'bg-green-50 text-green-700 border-green-200'  },
+}
+const STATUS_CYCLE = ['saved', 'in_progress', 'done']
 
 export default function PapersPanel() {
-  const [topic, setTopic] = useState('')
-  const [results, setResults] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [searched, setSearched] = useState(false)
+  const [topic, setTopic]         = useState('')
+  const [results, setResults]     = useState([])
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState('')
+  const [searched, setSearched]   = useState(false)
+  const [progressMap, setProgressMap] = useState({})  // url → { id, status }
+  const [tracking, setTracking]   = useState(new Set())
+
+  // Load existing progress on mount
+  useEffect(() => {
+    progressApi.list().then(d => {
+      const map = {}
+      for (const item of d.items || []) {
+        if (item.item_type === 'paper') map[item.item_url] = item
+      }
+      setProgressMap(map)
+    }).catch(() => {})
+  }, [])
 
   const search = async (e) => {
     e.preventDefault()
@@ -19,6 +40,28 @@ export default function PapersPanel() {
     } catch (err) {
       setError(err.message)
     } finally { setLoading(false) }
+  }
+
+  const paperUrl = (paper) => paper.pdf_url || (paper.id ? `https://arxiv.org/abs/${paper.id}` : null)
+
+  const trackPaper = async (paper) => {
+    const url = paperUrl(paper)
+    if (!url) return
+    setTracking(s => new Set([...s, url]))
+    try {
+      const existing = progressMap[url]
+      if (existing) {
+        const nextStatus = STATUS_CYCLE[(STATUS_CYCLE.indexOf(existing.status) + 1) % STATUS_CYCLE.length]
+        await progressApi.update(existing.id, nextStatus)
+        setProgressMap(prev => ({ ...prev, [url]: { ...existing, status: nextStatus } }))
+      } else {
+        const item = await progressApi.add('paper', url, paper.title)
+        setProgressMap(prev => ({ ...prev, [url]: item }))
+      }
+    } catch { /* ignore */ }
+    finally {
+      setTracking(s => { const n = new Set(s); n.delete(url); return n })
+    }
   }
 
   return (
@@ -65,38 +108,66 @@ export default function PapersPanel() {
         {!loading && results.length > 0 && (
           <div className="space-y-3">
             <p className="text-xs text-gray-400 mb-3">{results.length} papers found for "{topic}"</p>
-            {results.map((paper) => (
-              <div key={paper.id} className="card p-4 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 text-sm leading-snug mb-1">
-                      {paper.title}
-                    </h3>
-                    <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
-                      <Users size={11} />
-                      <span className="truncate">{paper.authors?.join(', ')}{paper.authors?.length > 4 ? ' et al.' : ''}</span>
-                      <span className="shrink-0 ml-auto">{paper.published}</span>
+            {results.map((paper) => {
+              const url = paperUrl(paper)
+              const tracked = url ? progressMap[url] : null
+              const isTracking = url && tracking.has(url)
+              const statusMeta = tracked ? STATUS_META[tracked.status] : null
+              return (
+                <div key={paper.id} className="card p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 text-sm leading-snug mb-1">
+                        {paper.title}
+                      </h3>
+                      <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+                        <Users size={11} />
+                        <span className="truncate">{paper.authors?.join(', ')}{paper.authors?.length > 4 ? ' et al.' : ''}</span>
+                        <span className="shrink-0 ml-auto">{paper.published}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 leading-relaxed line-clamp-3">
+                        {paper.summary}
+                      </p>
+                      <div className="mt-2 flex items-center gap-3">
+                        <span className="text-xs font-mono text-gray-400">{paper.id}</span>
+                        {paper.pdf_url && (
+                          <a
+                            href={paper.pdf_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-accent-600 hover:text-accent-700 font-medium"
+                          >
+                            <ExternalLink size={11} /> Read PDF
+                          </a>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-xs text-gray-500 leading-relaxed line-clamp-3">
-                      {paper.summary}
-                    </p>
-                    <div className="mt-2 flex items-center gap-3">
-                      <span className="text-xs font-mono text-gray-400">{paper.id}</span>
-                      {paper.pdf_url && (
-                        <a
-                          href={paper.pdf_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-accent-600 hover:text-accent-700 font-medium"
-                        >
-                          <ExternalLink size={11} /> Read PDF
-                        </a>
-                      )}
-                    </div>
+
+                    {url && (
+                      <button
+                        onClick={() => trackPaper(paper)}
+                        disabled={isTracking}
+                        title={tracked ? `Status: ${tracked.status} — click to advance` : 'Track this paper'}
+                        className={clsx(
+                          'flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-all shrink-0',
+                          tracked
+                            ? statusMeta?.color
+                            : 'text-gray-400 border-gray-200 hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'
+                        )}
+                      >
+                        {isTracking
+                          ? <Loader2 size={10} className="animate-spin" />
+                          : tracked
+                            ? <BookmarkCheck size={10} />
+                            : <BookmarkPlus size={10} />
+                        }
+                        {isTracking ? '…' : tracked ? statusMeta?.label : 'Track'}
+                      </button>
+                    )}
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 

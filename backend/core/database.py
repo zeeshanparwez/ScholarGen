@@ -51,10 +51,40 @@ def init_db():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bookmarks (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                username  TEXT NOT NULL REFERENCES users(username),
+                content   TEXT NOT NULL,
+                timestamp TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS progress (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                username  TEXT NOT NULL REFERENCES users(username),
+                item_type TEXT NOT NULL,
+                item_url  TEXT NOT NULL,
+                title     TEXT NOT NULL,
+                status    TEXT NOT NULL DEFAULT 'saved',
+                timestamp TEXT NOT NULL,
+                UNIQUE(username, item_url)
+            )
+            """
+        )
         # Migration: add columns to existing databases that predate this schema
-        for col, default in [("current_role", "''"), ("target_role", "''")]:
+        for col, default in [
+            ("current_role",  "''"),
+            ("target_role",   "''"),
+            ("streak_count",  "0"),
+            ("last_active",   "''"),
+        ]:
             try:
-                conn.execute(f"ALTER TABLE user_profiles ADD COLUMN {col} TEXT NOT NULL DEFAULT {default}")
+                dtype = "INTEGER" if col == "streak_count" else "TEXT"
+                conn.execute(f"ALTER TABLE user_profiles ADD COLUMN {col} {dtype} NOT NULL DEFAULT {default}")
             except Exception:
                 pass  # column already exists
 
@@ -164,6 +194,145 @@ def get_all_profiles() -> list:
         }
         for row in rows
     ]
+
+
+# ── Streak tracker ────────────────────────────────────────────────────────────
+
+def record_activity(username: str) -> int:
+    """Record today's activity for the user and return their current streak count."""
+    from datetime import date, timedelta
+    today = date.today().isoformat()
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT streak_count, last_active FROM user_profiles WHERE username = ?", (username,)
+        ).fetchone()
+
+        if row is None:
+            return 0  # User profile not created yet
+
+        last_active = row["last_active"] or ""
+        streak = row["streak_count"] or 0
+
+        if last_active == today:
+            return streak  # Already recorded today
+
+        if last_active == yesterday:
+            streak += 1
+        else:
+            streak = 1  # Reset if gap > 1 day
+
+        conn.execute(
+            "UPDATE user_profiles SET streak_count = ?, last_active = ? WHERE username = ?",
+            (streak, today, username),
+        )
+        return streak
+
+
+# ── Bookmarks ─────────────────────────────────────────────────────────────────
+
+def add_bookmark(username: str, content: str, timestamp: str) -> int:
+    """Save a bookmarked message. Returns the new bookmark id."""
+    with _conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO bookmarks (username, content, timestamp) VALUES (?, ?, ?)",
+            (username, content, timestamp),
+        )
+        return cur.lastrowid
+
+
+def get_bookmarks(username: str) -> list:
+    """Return all bookmarks for a user, newest first."""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT id, content, timestamp FROM bookmarks WHERE username = ? ORDER BY id DESC",
+            (username,),
+        ).fetchall()
+    return [{"id": r["id"], "content": r["content"], "timestamp": r["timestamp"]} for r in rows]
+
+
+def delete_bookmark(bookmark_id: int, username: str) -> bool:
+    """Delete a bookmark. Returns True if a row was deleted."""
+    with _conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM bookmarks WHERE id = ? AND username = ?",
+            (bookmark_id, username),
+        )
+        return cur.rowcount > 0
+
+
+# ── Progress tracker ───────────────────────────────────────────────────────────
+
+def upsert_progress(username: str, item_type: str, item_url: str, title: str, status: str, timestamp: str) -> int:
+    """Insert or update a progress item. Returns the item id."""
+    with _conn() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO progress (username, item_type, item_url, title, status, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(username, item_url) DO UPDATE SET
+                status    = excluded.status,
+                timestamp = excluded.timestamp
+            """,
+            (username, item_type, item_url, title, status, timestamp),
+        )
+        if cur.lastrowid:
+            return cur.lastrowid
+        row = conn.execute(
+            "SELECT id FROM progress WHERE username = ? AND item_url = ?", (username, item_url)
+        ).fetchone()
+        return row["id"] if row else -1
+
+
+def get_progress(username: str) -> list:
+    """Return all tracked items for a user, newest first."""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM progress WHERE username = ? ORDER BY id DESC",
+            (username,),
+        ).fetchall()
+    return [
+        {
+            "id": r["id"], "item_type": r["item_type"], "item_url": r["item_url"],
+            "title": r["title"], "status": r["status"], "timestamp": r["timestamp"],
+        }
+        for r in rows
+    ]
+
+
+def get_progress_by_url(username: str, item_url: str) -> dict | None:
+    """Return a single progress item by URL, or None."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM progress WHERE username = ? AND item_url = ?", (username, item_url)
+        ).fetchone()
+    if row is None:
+        return None
+    return {
+        "id": row["id"], "item_type": row["item_type"], "item_url": row["item_url"],
+        "title": row["title"], "status": row["status"], "timestamp": row["timestamp"],
+    }
+
+
+def update_progress_status(progress_id: int, username: str, status: str) -> bool:
+    """Update the status of a progress item. Returns True if updated."""
+    with _conn() as conn:
+        cur = conn.execute(
+            "UPDATE progress SET status = ? WHERE id = ? AND username = ?",
+            (status, progress_id, username),
+        )
+        return cur.rowcount > 0
+
+
+def delete_progress(progress_id: int, username: str) -> bool:
+    """Delete a progress item. Returns True if deleted."""
+    with _conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM progress WHERE id = ? AND username = ?",
+            (progress_id, username),
+        )
+        return cur.rowcount > 0
 
 
 # Auto-initialise when module is first imported.

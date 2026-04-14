@@ -1,9 +1,54 @@
-import { useRef, useEffect } from 'react'
-import { SendHorizontal, Square } from 'lucide-react'
+import { useRef, useEffect, useState, useCallback } from 'react'
+import { SendHorizontal, Square, Mic, MicOff } from 'lucide-react'
 import clsx from 'clsx'
+
+function useVoiceInput(textareaRef) {
+  const [listening, setListening] = useState(false)
+  const recognitionRef = useRef(null)
+
+  const supported = typeof window !== 'undefined' &&
+    !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+
+  const toggle = useCallback(() => {
+    if (!supported) return
+
+    if (listening) {
+      recognitionRef.current?.stop()
+      setListening(false)
+      return
+    }
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    const rec = new SR()
+    rec.lang = 'en-US'
+    rec.interimResults = false
+    rec.maxAlternatives = 1
+
+    rec.onresult = (e) => {
+      const transcript = e.results[0][0].transcript
+      if (textareaRef.current) {
+        textareaRef.current.value = textareaRef.current.value
+          ? textareaRef.current.value + ' ' + transcript
+          : transcript
+        // Trigger resize
+        textareaRef.current.dispatchEvent(new Event('input', { bubbles: true }))
+        textareaRef.current.focus()
+      }
+    }
+    rec.onend = () => setListening(false)
+    rec.onerror = () => setListening(false)
+
+    recognitionRef.current = rec
+    rec.start()
+    setListening(true)
+  }, [listening, supported, textareaRef])
+
+  return { listening, toggle, supported }
+}
 
 export default function ChatInput({ onSend, disabled, streaming }) {
   const ref = useRef(null)
+  const { listening, toggle, supported } = useVoiceInput(ref)
 
   // Auto-resize textarea
   useEffect(() => {
@@ -40,9 +85,33 @@ export default function ChatInput({ onSend, disabled, streaming }) {
             rows={1}
             onKeyDown={onKey}
             disabled={disabled}
-            placeholder={streaming ? 'Generating response…' : 'Ask anything about learning…'}
+            placeholder={
+              listening ? 'Listening… speak now'
+              : streaming ? 'Generating response…'
+              : 'Ask anything about learning…'
+            }
             className="flex-1 resize-none bg-transparent text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none leading-6 max-h-40 min-h-[24px] disabled:opacity-60"
           />
+
+          {/* Mic button */}
+          {supported && (
+            <button
+              type="button"
+              onClick={toggle}
+              disabled={streaming}
+              title={listening ? 'Stop listening' : 'Voice input'}
+              className={clsx(
+                'w-8 h-8 rounded-xl flex items-center justify-center transition-all shrink-0',
+                listening
+                  ? 'bg-red-500 text-white animate-pulse'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              )}
+            >
+              {listening ? <MicOff size={14} strokeWidth={2.5} /> : <Mic size={14} strokeWidth={2.5} />}
+            </button>
+          )}
+
+          {/* Send button */}
           <button
             onClick={submit}
             disabled={disabled}
@@ -58,7 +127,7 @@ export default function ChatInput({ onSend, disabled, streaming }) {
           </button>
         </div>
         <p className="text-center text-xs text-gray-400 mt-2">
-          Shift+Enter for new line · Enter to send
+          Shift+Enter for new line · Enter to send{supported ? ' · Mic for voice' : ''}
         </p>
       </div>
     </div>

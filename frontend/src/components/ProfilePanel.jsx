@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { User, Zap, BookOpen, Plus, X, Save, Loader2 } from 'lucide-react'
+import { User, Zap, BookOpen, Plus, X, Save, Loader2, Linkedin, Copy, Check, Sparkles } from 'lucide-react'
 import { profile as profileApi } from '../api'
 
 function TagList({ tags, onRemove, color = 'accent' }) {
@@ -61,6 +61,12 @@ export default function ProfilePanel() {
   const [currentRole, setCurrentRole] = useState('')
   const [targetRole, setTargetRole] = useState('')
 
+  // Bio generator
+  const [bioLoading, setBioLoading] = useState(false)
+  const [bioResult, setBioResult]   = useState(null)
+  const [bioError, setBioError]     = useState('')
+  const [copiedField, setCopiedField] = useState(null)
+
   useEffect(() => {
     profileApi.get().then(d => {
       setData(d)
@@ -82,6 +88,25 @@ export default function ProfilePanel() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const generateBio = async () => {
+    setBioLoading(true); setBioError(''); setBioResult(null)
+    try {
+      const data = await profileApi.generateBio()
+      if (data.error) { setBioError(data.error); return }
+      setBioResult(data)
+    } catch (e) {
+      setBioError(e.message)
+    } finally {
+      setBioLoading(false)
+    }
+  }
+
+  const copyField = async (text, field) => {
+    await navigator.clipboard.writeText(text)
+    setCopiedField(field)
+    setTimeout(() => setCopiedField(null), 2000)
   }
 
   const cancel = () => {
@@ -209,6 +234,83 @@ export default function ProfilePanel() {
             <p className="text-xs text-gray-400 italic">No interests detected yet — start chatting!</p>
           )}
           {editing && <TagInput onAdd={t => !interests.includes(t) && setInterests([...interests, t])} placeholder="Add an interest…" />}
+        </div>
+
+        {/* LinkedIn Bio Generator */}
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles size={15} className="text-accent-500" />
+              <h3 className="text-sm font-semibold text-gray-800">LinkedIn Bio Generator</h3>
+            </div>
+            <button
+              onClick={generateBio}
+              disabled={bioLoading}
+              className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+            >
+              {bioLoading
+                ? <><Loader2 size={12} className="animate-spin" /> Generating…</>
+                : <><Sparkles size={12} /> Generate</>
+              }
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">
+            AI-crafted headline, bio, and elevator pitch based on your skill profile.
+          </p>
+
+          {bioError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{bioError}</p>
+          )}
+
+          {bioResult && (
+            <div className="space-y-3 mt-1">
+              {bioResult.headline && (
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-medium text-gray-500">Headline</p>
+                    <button
+                      onClick={() => copyField(bioResult.headline, 'headline')}
+                      className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1"
+                    >
+                      {copiedField === 'headline' ? <Check size={11} className="text-green-600" /> : <Copy size={11} />}
+                      {copiedField === 'headline' ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-800 font-medium">{bioResult.headline}</p>
+                </div>
+              )}
+              {bioResult.bio && (
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-medium text-gray-500">About / Bio</p>
+                    <button
+                      onClick={() => copyField(bioResult.bio, 'bio')}
+                      className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1"
+                    >
+                      {copiedField === 'bio' ? <Check size={11} className="text-green-600" /> : <Copy size={11} />}
+                      {copiedField === 'bio' ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-700 leading-relaxed">{bioResult.bio}</p>
+                </div>
+              )}
+              {bioResult.elevator_pitch && (
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-medium text-gray-500">Elevator Pitch (30 sec)</p>
+                    <button
+                      onClick={() => copyField(bioResult.elevator_pitch, 'pitch')}
+                      className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1"
+                    >
+                      {copiedField === 'pitch' ? <Check size={11} className="text-green-600" /> : <Copy size={11} />}
+                      {copiedField === 'pitch' ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-700 leading-relaxed">{bioResult.elevator_pitch}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
       </div>
