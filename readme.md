@@ -1,235 +1,226 @@
-# 🎓 EduAssist — AI-Powered Research & Learning Assistant
+# ScholarGen — AI-Powered Student Learning Assistant
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-red.svg)](https://streamlit.io)
-[![LangGraph](https://img.shields.io/badge/LangGraph-Latest-green.svg)](https://langchain-ai.github.io/langgraph/)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev)
+[![LangGraph](https://img.shields.io/badge/LangGraph-0.6.7-green.svg)](https://langchain-ai.github.io/langgraph/)
+[![Gemini](https://img.shields.io/badge/Gemini-3.1%20Flash%20Lite-4285F4.svg)](https://ai.google.dev)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**An intelligent research companion that combines LangGraph agents, MCP tools, and advanced AI to accelerate academic research workflows and student learning.**
+**ScholarGen (EduAssist)** is an AI-powered educational assistant that helps students find courses, discover research papers, generate flashcards, and collaborate with peers — all through a streaming chat interface powered by Google Gemini and LangGraph.
 
-EduAssist bridges the gap between fragmented research tools by providing a unified platform for academic paper discovery, content analysis, course recommendations, and intelligent Q&A — all powered by memory-enabled conversation that adapts to your research focus.
+## Features
 
-![EduAssist Interface](images/edu.png)
+- **Streaming Chat** — token-by-token SSE streaming with real-time tool-use indicators
+- **NPTEL Course Search** — semantic search across 3,200+ NPTEL courses using ChromaDB
+- **Research Paper Discovery** — arXiv search, full paper extraction, and in-session semantic cache
+- **YouTube Transcript** — extract and summarize transcripts from educational videos
+- **Web Fetch** — retrieve and analyze any webpage or article
+- **GATE Flashcards** — AI-generated MCQ flashcards for GATE exam preparation
+- **Study Partner Matching** — match with similar users based on interests and skills
+- **Per-User Memory** — isolated conversation history per account via LangGraph thread IDs
+- **JWT Authentication** — secure login/signup with bcrypt password hashing
 
-## 📋 Table of Contents
+## Architecture
 
-- [🔬 Features](#-features)
-- [🏗️ Architecture](#️-architecture)  
-- [🚀 Quick Start](#-quick-start)
-- [⚙️ Configuration](#️-configuration)
-- [🛠️ Usage](#️-usage)
-- [📊 Research Capabilities](#-research-capabilities)
-- [🤝 Contributing](#-contributing)
-- [📄 License](#-license)
-- [❓ FAQ](#-faq)
+```
+Browser (React + Vite + Tailwind)
+  └── /api/* → FastAPI (uvicorn :8000)
+        ├── /api/auth        — JWT login / signup
+        ├── /api/chat/stream — SSE streaming chat (LangGraph ReAct agent)
+        ├── /api/courses     — NPTEL semantic search (ChromaDB)
+        ├── /api/papers      — arXiv paper search
+        ├── /api/flashcards  — GATE MCQ generation (Gemini)
+        └── /api/collaborate — User similarity matching
 
-## 🔬 Features
+LangGraph ReAct Agent
+  ├── LLM: Gemini 3.1 Flash Lite (langchain-google-genai)
+  ├── Memory: MemorySaver (per-user UUID thread_id)
+  └── Tools (via MCP + LangChain):
+        ├── find_nptel_courses    — ChromaDB semantic search
+        ├── search_papers         — arXiv search (research_mcp.py)
+        ├── extract_info          — Full paper metadata (research_mcp.py)
+        ├── search_cached_papers  — In-session ChromaDB paper cache
+        ├── get_transcript        — YouTube transcript (youtube_mcp.py)
+        └── fetch                 — Web content (mcp-server-fetch via uvx)
+```
 
-### **Academic Research Tools**
-- **arXiv Paper Discovery**: Search, extract, and analyze academic papers with automatic metadata storage
-- **Citation Management**: Organize research papers with JSON metadata for easy reference
-- **Paper Summarization**: AI-powered extraction of key insights, methodologies, and findings
+## Project Structure
 
-### **Multi-Modal Content Analysis**
-- **YouTube Transcript Extraction**: Process educational videos and lectures for research analysis
-- **Web Research Integration**: Fetch and analyze academic websites and documentation
-- **NPTEL Course Discovery**: Semantic search through pre-embedded course datasets
+```
+ScholarGen/
+├── backend/
+│   ├── main.py                      # FastAPI app, lifespan, router registration
+│   ├── jwt_utils.py                 # JWT create/decode (48h expiry)
+│   ├── dependencies.py              # get_current_user FastAPI dependency
+│   ├── agent_orchestrator.py        # MCPSessionManager — launches MCP subprocesses
+│   ├── services/
+│   │   └── chatbot_service.py       # Singleton LangGraph agent (init at startup)
+│   ├── routers/
+│   │   ├── auth.py                  # POST /register, POST /login
+│   │   ├── chat.py                  # POST /stream, DELETE /clear
+│   │   ├── courses.py               # GET /search
+│   │   ├── papers.py                # GET /search
+│   │   ├── flashcards.py            # GET /subjects, POST /generate
+│   │   └── collaborate.py           # GET / (user matching)
+│   ├── core/
+│   │   ├── database.py              # SQLite — users + user_profiles (WAL mode)
+│   │   ├── course_retriever.py      # ChromaDB loader + LangChain tool wrapper
+│   │   ├── collaboration.py         # Profile extraction + cosine similarity matching
+│   │   └── flashcards.py            # GATE MCQ generation via Gemini
+│   └── mcp/
+│       ├── research_mcp.py          # FastMCP — arXiv search + ChromaDB paper cache
+│       └── youtube_mcp.py           # FastMCP — YouTube transcript extraction
+├── frontend/
+│   ├── src/
+│   │   ├── api.js                   # API client with SSE parser
+│   │   ├── pages/
+│   │   │   ├── LoginPage.jsx
+│   │   │   └── ChatPage.jsx
+│   │   └── components/
+│   │       ├── Sidebar.jsx          # Tool activity + panel navigation
+│   │       ├── ChatMessage.jsx      # Markdown rendering
+│   │       ├── ChatInput.jsx
+│   │       ├── CoursesPanel.jsx
+│   │       ├── PapersPanel.jsx
+│   │       ├── CollaboratePanel.jsx
+│   │       └── FlashcardModal.jsx
+│   ├── dist/                        # Built output — served by FastAPI at /
+│   └── package.json
+├── Config/
+│   └── .env                         # API keys and secrets (not committed)
+├── Data/
+│   ├── nptel_courses_with_embeddings.xlsx   # Pre-embedded NPTEL catalog
+│   └── scholargen.db                        # SQLite DB (auto-created on first run)
+├── scripts/
+│   └── generate_embeddings.py       # Re-embed NPTEL catalog with Gemini API
+├── requirements.txt
+└── readme.md
+```
 
-### **Intelligent Memory System**
-- **Persistent Context**: Remember research topics and ongoing investigations across sessions
-- **Adaptive Learning**: Personalize recommendations based on research history
-- **Cross-Reference Tracking**: Maintain connections between papers, concepts, and research threads
+## Quick Start
 
-## 🏗️ Architecture
+### Prerequisites
 
-EduAssist/<br>
-├── Config/<br>
-│ └── .env   # Environment variables and API keys<br>
-├── Data/<br>
-│ └── nptel_courses_with_embeddings.xlsx<br>
-├── agent_orchestrator.py   # LangGraph ReAct agent with memory<br>
-├── course_retriever.py # NPTEL semantic search engine<br>
-├── main.py # Streamlit research interface<br>
-├── research_mcp.py # arXiv paper discovery & extraction<br>
-├── youtube_mcp.py # Academic video transcript extraction<br>
-├── requirements.txt # Python dependencies<br>
-└── README.md # Project documentation<br>
+- Python 3.11+
+- Node.js 18+
+- [`uv`](https://docs.astral.sh/uv/) — required for MCP server management
 
-
-### **Core Components**
-- **Memory-Enabled Agent**: LangGraph ReAct agent with MemorySaver for persistent research context
-- **MCP Integration**: Model Context Protocol servers for seamless tool communication
-- **Semantic Search Engine**: SentenceTransformer-based recommendations with cosine similarity
-- **Interactive UI**: Streamlit interface with real-time processing and debug capabilities
-
-## 🚀 Quick Start
-
-### **Prerequisites**
-
-Before you begin, ensure you have the following installed:
-- Python 3.8 or higher
-- pip package manager
-- Git
-
-### **Installation**
-
-1. **Clone the repository**
-```bash
-git clone https://github.com/zeeshanparwez/EduAssist.git
-cd EduAssist
-````
-
-2. **Install dependencies**
-```bash
-pip install -r requirements.txt
-````
-
-
-3. **Install uv for MCP server management**
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-````
+```
 
-### **Configuration**
+### 1. Clone and install
 
-1. **Create environment file**
 ```bash
-mkdir Config
-touch Config/.env
-````
+git clone https://github.com/zeeshanparwez/ScholarGen.git
+cd ScholarGen
+pip install -r requirements.txt
+```
 
-2. **Add your API credentials to `Config/.env`**
+### 2. Configure environment
+
+Create `Config/.env`:
+
+```env
+GOOGLE_API_KEY=your_google_api_key_here
+JWT_SECRET_KEY=any_random_secret_string
+
+# Optional — defaults shown
+GEMINI_MODEL=gemini-3.1-flash-lite-preview
+COURSE_DATA_PATH=/absolute/path/to/Data/nptel_courses_with_embeddings.xlsx
+```
+
+Get a free Google API key at [aistudio.google.com](https://aistudio.google.com).
+
+### 3. Build the frontend
+
 ```bash
-GOOGLE_API_KEY=your_google_generative_ai_key_here
-COURSE_DATA_PATH=/absolute/path/to/nptel_courses.xlsx
-````
+cd frontend
+npm install
+npm run build   # outputs to frontend/dist/ — served automatically by FastAPI
+cd ..
+```
 
-3. **Prepare course data** (Optional)
-- Download or prepare NPTEL course dataset with pre-computed embeddings
-- Ensure Excel file contains: `embedding`, `course_name`, `url`, `description` columns [attached_file:4]
+### 4. Run
 
-### **Launch Application**
 ```bash
-streamlit run main.py
-````
+uvicorn backend.main:app --reload --port 8000
+```
 
-The application will be available at `http://localhost:8501`
+Open [http://localhost:8000](http://localhost:8000), create an account, and start chatting.
 
-## ⚙️ Configuration
+### Development mode (hot-reload on both sides)
 
-### **Environment Variables**
+```bash
+# Terminal 1 — backend
+uvicorn backend.main:app --reload --port 8000
+
+# Terminal 2 — frontend (Vite dev server, proxies /api to :8000)
+cd frontend && npm run dev
+# Open http://localhost:5173
+```
+
+## Configuration
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `GOOGLE_API_KEY` | Google Generative AI API key for Gemini model | ✅ Yes |
-| `COURSE_DATA_PATH` | Absolute path to NPTEL courses Excel file | ✅ Yes |
+| `GOOGLE_API_KEY` | Google AI Studio key (Gemini + Embeddings) | Yes |
+| `JWT_SECRET_KEY` | Any random secret string for JWT signing | Yes |
+| `GEMINI_MODEL` | Gemini model name | No (default: `gemini-3.1-flash-lite-preview`) |
+| `COURSE_DATA_PATH` | Absolute path to NPTEL Excel file | No (auto-detected) |
 
-### **Course Dataset Format**
+## SSE Streaming Protocol
 
-Your NPTEL course dataset should include these columns:
-- `embedding`: Pre-computed sentence embeddings (JSON array format)
-- `course_name`: Course title for display
-- `url`: Direct course link  
-- `description`: Course summary for semantic matching
+`POST /api/chat/stream` returns `text/event-stream`:
 
-## 🛠️ Usage
+```
+data: {"type": "token",     "content": "Hello"}
+data: {"type": "tool_call", "tool": "find_nptel_courses", "status": "start"}
+data: {"type": "tool_call", "tool": "find_nptel_courses", "status": "end"}
+data: {"type": "done"}
+data: {"type": "error",     "content": "..."}
+```
 
-### **Starting a Research Session**
+## Example Queries
 
-1. Launch the application using `streamlit run main.py`
-2. Wait for initialization to complete (tools will appear in sidebar)
-3. Start asking research questions in natural language
+| Goal | Query |
+|------|-------|
+| Find courses | "Recommend NPTEL courses for deep learning" |
+| Research papers | "Find recent papers on transformer architectures" |
+| Video summary | "Get the transcript from this YouTube lecture: [URL]" |
+| Concept help | "Explain attention mechanism step by step" |
+| Flashcards | Use the Flashcards panel → select GATE branch → generate |
+| Study partners | Use the Collaborate panel to find similar users |
 
-### **Research Workflow Examples**
+## Tech Stack
 
-**Paper Discovery**:
-"Find recent papers on neural networks for natural language processing"
+| Layer | Technology |
+|-------|-----------|
+| Backend | FastAPI 0.115, uvicorn, Python 3.11 |
+| Frontend | React 18, Vite 5, Tailwind CSS 3 |
+| Agent | LangGraph 0.6.7, LangChain 0.3.27 |
+| LLM | Google Gemini 3.1 Flash Lite |
+| Vector store | ChromaDB 0.6.3 (in-memory) |
+| MCP tools | FastMCP, mcp-server-fetch (via uvx) |
+| Auth | PyJWT 2.9.0, bcrypt |
+| Database | SQLite (stdlib) — WAL mode |
+| Embeddings | Gemini Embedding API (`gemini-embedding-2-preview`, 768d) |
 
-**Course Recommendations**:
-"Suggest NPTEL courses related to machine learning and AI"
+## Deployment (Free Tier)
 
-**Video Analysis**:
-"Extract transcript from this YouTube lecture: [URL]"
+Recommended stack: **Render** (backend) + **Vercel** (frontend) + **Supabase** (optional DB)
 
-**Multi-Modal Research**:
-"Research transformer architectures, find papers and related courses"
+**Render (backend):**
+- Build command: `pip install -r requirements.txt && cd frontend && npm install && npm run build`
+- Start command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+- Set env vars: `GOOGLE_API_KEY`, `JWT_SECRET_KEY`
 
-## 📊 Research Capabilities
+**Vercel (frontend, optional separate deploy):**
+- Build: `npm run build` from `frontend/`
+- Output: `frontend/dist`
+- Set `VITE_API_URL` to your Render backend URL
 
-### **Academic Paper Management**
-- **Automated Search**: Query arXiv database with natural language
-- **Metadata Extraction**: Automatic paper information parsing and storage
-- **Citation Tracking**: Organize research with JSON-based reference system
+## License
 
-### **Content Analysis Pipeline**
-- **Educational Video Processing**: Extract and analyze YouTube lecture content
-- **Web Research Tools**: Fetch academic websites and documentation
-- **Course Discovery**: Find relevant educational content using semantic similarity 
-
-### **Memory-Enhanced Learning**
-- **Session Persistence**: Maintain research context across multiple interactions
-- **Adaptive Recommendations**: Learn from research patterns and preferences 
-- **Knowledge Graph**: Build connections between papers, concepts, and resources 
-
-## 🤝 Contributing
-
-We welcome contributions from the research community! Here's how you can help:
-
-### **Development Setup**
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes and test thoroughly
-4. Submit a pull request with detailed description
-
-### **Areas for Contribution**
-- Enhanced citation network analysis
-- Multi-language academic content support
-- Advanced research visualization tools
-- Integration with institutional repositories
-
-### **Code Style**
-- Follow PEP 8 Python style guidelines
-- Add docstrings to all functions and classes
-- Include unit tests for new features
-- Update documentation as needed
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## ❓ FAQ
-
-### **General Questions**
-
-**Q: What makes EduAssist different from other research tools?**<br>
-A: EduAssist combines multiple research workflows into a single memory-enabled AI assistant, providing contextual recommendations and maintaining research continuity across sessions.
-
-**Q: Do I need programming knowledge to use EduAssist?**<br>
-A: No! EduAssist provides a user-friendly Streamlit interface that requires no programming experience.
-
-### **Technical Questions**
-
-**Q: How does the memory system work?**<br>
-A: EduAssist uses LangGraph's MemorySaver to maintain conversation context and research history across sessions.
-
-**Q: Can I add custom research sources?**<br>
-A: Yes, the MCP architecture allows for easy integration of additional research tools and databases.
-
-**Q: What if initialization fails?**<br>
-A: Check your API keys, network connection, and use the built-in Retry button in the interface. Debug logs are available in the sidebar.
-
-### **Data and Privacy**
-
-**Q: How is my research data stored?**<br>
-A: Research data is stored locally in JSON format. No personal research information is sent to external services beyond necessary API calls.
-
-**Q: Is my conversation history private?**<br>
-A: Yes, all conversation memory is stored locally using LangGraph's MemorySaver system.
-
----
-
-**Transform your research workflow with AI-powered discovery, analysis, and synthesis. Start exploring the future of academic research today!**
-
-For questions and support, please [open an issue](https://github.com/zeeshanparwez/EduAssist/issues) or contact the development team.
-
+MIT License — see [LICENSE](LICENSE) for details.

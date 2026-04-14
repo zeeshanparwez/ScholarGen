@@ -18,6 +18,11 @@ Data/*.db
 *.db
 *.sqlite3
 
+# Large data / backup files
+Data/*1.xlsx
+Data/*.npy
+scripts/embed.log
+
 # Node / Frontend
 frontend/node_modules/
 frontend/dist/

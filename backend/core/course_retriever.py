@@ -16,9 +16,10 @@ import chromadb
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 from langchain.tools import StructuredTool
 from pydantic import BaseModel, Field
-from sentence_transformers import SentenceTransformer
 
 # Project root is 2 levels up from this file (backend/core/ → backend/ → ScholarGen/)
 _FILE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -29,7 +30,8 @@ COURSE_DATA_PATH = os.environ.get(
     "COURSE_DATA_PATH",
     os.path.join(BASE_DIR, "Data", "nptel_courses_with_embeddings.xlsx"),
 )
-EMBED_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
+GEMINI_EMBED_MODEL = "gemini-embedding-2-preview"
+EMBED_DIM = 768
 
 
 def _to_array(x) -> np.ndarray:
@@ -102,8 +104,21 @@ def _get_collection():
 
 
 @lru_cache(maxsize=1)
-def _get_embed_model() -> SentenceTransformer:
-    return SentenceTransformer(EMBED_MODEL)
+def _get_gemini_client() -> genai.Client:
+    return genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+
+
+def _embed_query(query: str) -> list:
+    """Embed a search query using Gemini API (RETRIEVAL_QUERY task type)."""
+    result = _get_gemini_client().models.embed_content(
+        model=GEMINI_EMBED_MODEL,
+        contents=query,
+        config=types.EmbedContentConfig(
+            task_type="RETRIEVAL_QUERY",
+            output_dimensionality=EMBED_DIM,
+        ),
+    )
+    return list(result.embeddings[0].values)
 
 
 class CourseRetriever:
@@ -119,9 +134,7 @@ class CourseRetriever:
         exclude_urls: Optional[List[str]] = None,
     ) -> str:
         collection = _get_collection()
-        model = _get_embed_model()
-
-        query_emb = model.encode([query], normalize_embeddings=True)[0].tolist()
+        query_emb = _embed_query(query)
 
         n_fetch = min(top_k + len(exclude_urls or []) + 5, collection.count() or 1)
         results = collection.query(

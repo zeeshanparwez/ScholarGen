@@ -3,9 +3,10 @@ import os
 
 import numpy as np
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from backend.core.database import get_all_profiles, get_profile, upsert_profile
@@ -15,9 +16,8 @@ _FILE_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(os.path.dirname(_FILE_DIR))
 load_dotenv(os.path.join(BASE_DIR, "Config", ".env"))
 
-embedding_model = SentenceTransformer(
-    os.environ.get("EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
-)
+GEMINI_EMBED_MODEL = "gemini-embedding-2-preview"
+EMBED_DIM = 768
 
 llm = ChatGoogleGenerativeAI(
     model=os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview"),
@@ -65,8 +65,18 @@ def _profile_to_text(profile: dict) -> str:
 
 
 def _compute_embeddings(profiles: list) -> np.ndarray:
+    """Embed all user profiles in a single Gemini batch call."""
     texts = [_profile_to_text(p) for p in profiles]
-    return embedding_model.encode(texts, convert_to_numpy=True)
+    client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+    result = client.models.embed_content(
+        model=GEMINI_EMBED_MODEL,
+        contents=texts,
+        config=types.EmbedContentConfig(
+            task_type="SEMANTIC_SIMILARITY",
+            output_dimensionality=EMBED_DIM,
+        ),
+    )
+    return np.array([e.values for e in result.embeddings], dtype=np.float32)
 
 
 # ── Collaboration logic ───────────────────────────────────────────────────────
