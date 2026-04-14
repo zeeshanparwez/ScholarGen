@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { GraduationCap, BookOpen, Brain, Users } from 'lucide-react'
+import { Zap, BookOpen, Brain, Users } from 'lucide-react'
 import { auth } from '../api'
 
 export default function LoginPage() {
@@ -34,23 +34,23 @@ export default function LoginPage() {
       {/* Left panel — branding */}
       <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-accent-600 to-accent-700 text-white flex-col justify-between p-12">
         <div className="flex items-center gap-3">
-          <GraduationCap size={32} strokeWidth={1.5} />
-          <span className="text-xl font-semibold tracking-tight">ScholarGen</span>
+          <Zap size={32} strokeWidth={1.5} />
+          <span className="text-xl font-semibold tracking-tight">UpskillOS</span>
         </div>
         <div>
           <h1 className="text-4xl font-bold leading-tight mb-4">
-            Your AI-powered<br />learning companion
+            AI-powered upskilling<br />for modern professionals
           </h1>
           <p className="text-accent-100 text-lg leading-relaxed mb-10">
-            Find NPTEL courses, discover research papers, generate GATE flashcards,
-            and get instant answers — all in one place.
+            Build personalised learning paths, discover industry insights,
+            assess your skills, and connect with your talent network — all in one place.
           </p>
           <div className="grid grid-cols-2 gap-4">
             {[
-              { icon: BookOpen, label: 'NPTEL Courses', desc: 'Semantic course search' },
-              { icon: Brain,    label: 'Research Papers', desc: 'arXiv integration' },
-              { icon: GraduationCap, label: 'GATE Flashcards', desc: 'AI-generated MCQs' },
-              { icon: Users,   label: 'Collaborate', desc: 'Find study partners' },
+              { icon: BookOpen, label: 'Learning Paths',    desc: 'Role-based roadmaps' },
+              { icon: Brain,    label: 'Industry Insights', desc: 'Research & trends' },
+              { icon: Zap,      label: 'Skill Assessment',  desc: 'AI-generated quizzes' },
+              { icon: Users,    label: 'Talent Network',    desc: 'Find peers & mentors' },
             ].map(({ icon: Icon, label, desc }) => (
               <div key={label} className="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
                 <Icon size={20} strokeWidth={1.5} className="mb-2 text-accent-100" />
@@ -68,8 +68,8 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2 mb-8 justify-center">
-            <GraduationCap size={28} className="text-accent-600" />
-            <span className="text-xl font-semibold text-gray-900">ScholarGen</span>
+            <Zap size={28} className="text-accent-600" />
+            <span className="text-xl font-semibold text-gray-900">UpskillOS</span>
           </div>
 
           <div className="card p-8">
@@ -77,7 +77,7 @@ export default function LoginPage() {
               {tab === 'login' ? 'Welcome back' : 'Create account'}
             </h2>
             <p className="text-gray-500 text-sm mb-6">
-              {tab === 'login' ? 'Sign in to continue learning' : 'Start your learning journey'}
+              {tab === 'login' ? 'Sign in to continue upskilling' : 'Start your upskilling journey'}
             </p>
 
             {/* Tabs */}

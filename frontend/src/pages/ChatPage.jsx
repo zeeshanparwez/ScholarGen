@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Wrench, Search, Globe, Youtube, Database, BookOpen, BookMarked, Zap } from 'lucide-react'
+import { Loader2, Wrench, Search, Globe, Youtube, Database, BookOpen, BookMarked, Zap, ChevronDown } from 'lucide-react'
 
 const TOOL_META = {
   find_nptel_courses:   { label: 'Searching NPTEL courses',  icon: BookOpen  },
@@ -17,24 +17,36 @@ import CoursesPanel from '../components/CoursesPanel'
 import PapersPanel from '../components/PapersPanel'
 import FlashcardsPanel from '../components/FlashcardModal'
 import CollaboratePanel from '../components/CollaboratePanel'
+import LearningPathPanel from '../components/LearningPathPanel'
+import ProfilePanel from '../components/ProfilePanel'
+import OnboardingModal from '../components/OnboardingModal'
 import { chat } from '../api'
 
-const WELCOME = `**Hi! I'm EduAssist** — your AI learning companion.
+const PROVIDERS = [
+  { id: 'gemini',        label: 'Gemini',    sub: 'gemini-3.1-flash-lite-preview',  color: 'text-blue-600',   tools: true  },
+  { id: 'groq',          label: 'Groq',      sub: 'GPT-OSS 120B',                   color: 'text-emerald-600', tools: false },
+  { id: 'nim',           label: 'NIM',       sub: 'Llama 3.3 70B',                  color: 'text-green-700',  tools: true  },
+  { id: 'nim_llama4',    label: 'NIM',       sub: 'Llama 4 Maverick 17B',           color: 'text-teal-600',   tools: true  },
+  { id: 'nim_deepseek',  label: 'DeepSeek',  sub: 'R1 Distill 32B · reasoning',    color: 'text-purple-600', tools: false },
+  { id: 'nim_qwq',       label: 'QwQ',       sub: 'QwQ-32B · reasoning',            color: 'text-orange-600', tools: false },
+]
+
+const WELCOME = `**Hi! I'm UpskillOS** — your AI-powered upskilling assistant.
 
 Here's what I can do for you:
-- **Find NPTEL courses** on any topic
-- **Search research papers** from arXiv
+- **Build your learning path** — tell me your current role and where you want to go
+- **Find relevant courses** on any skill or technology
+- **Surface industry insights** — latest research and trends from arXiv
+- **Assess your skills** — generate quizzes on any topic
 - **Summarize articles and videos** — just paste a URL
-- **Answer academic questions** with step-by-step explanations
-- **Generate quizzes** on any concept
 
-Try asking: *"Find me NPTEL courses on machine learning"* or *"Explain transformer architecture"*`
+Try asking: *"I'm a backend developer, what do I need to learn to become an ML engineer?"*`
 
 const EXAMPLE_QUERIES = [
-  'Find NPTEL courses on deep learning',
-  'Summarize recent papers on LLMs',
-  'Explain the PageRank algorithm',
-  'What is the difference between TCP and UDP?',
+  'What skills do I need to become a cloud architect?',
+  'Find learning resources for product management',
+  'What are the latest trends in generative AI?',
+  'Explain microservices architecture with examples',
 ]
 
 export default function ChatPage() {
@@ -43,16 +55,36 @@ export default function ChatPage() {
   const [streaming, setStreaming] = useState(false)
   const [activeTools, setActiveTools] = useState([])
   const [runningTools, setRunningTools] = useState(new Set())
+  const [provider, setProvider] = useState(
+    () => localStorage.getItem('upskill_provider') || 'gemini'
+  )
+  const [providerOpen, setProviderOpen] = useState(false)
   const bottomRef = useRef(null)
+  const providerRef = useRef(null)
   const navigate = useNavigate()
 
   const username = localStorage.getItem('sg_user') || 'User'
+  const [showOnboarding, setShowOnboarding] = useState(
+    !localStorage.getItem('upskill_onboarded')
+  )
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
   useEffect(scrollToBottom, [messages, scrollToBottom])
+
+  // Close provider dropdown on outside click (ref-based so inside clicks still work)
+  useEffect(() => {
+    if (!providerOpen) return
+    const handler = (e) => {
+      if (providerRef.current && !providerRef.current.contains(e.target)) {
+        setProviderOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [providerOpen])
 
   const logout = () => {
     localStorage.removeItem('sg_token')
@@ -76,6 +108,7 @@ export default function ChatPage() {
     setRunningTools(new Set())
 
     await chat.stream(text, {
+      provider,
       onToken: (token) => {
         setMessages(prev =>
           prev.map(m => m.id === assistantId ? { ...m, content: m.content + token } : m)
@@ -110,7 +143,7 @@ export default function ChatPage() {
         setRunningTools(new Set())
       },
     })
-  }, [streaming, activeTools])
+  }, [streaming, activeTools, provider])
 
   const handleExample = (q) => {
     setPanel('chat')
@@ -119,6 +152,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
+      {showOnboarding && <OnboardingModal onDone={() => setShowOnboarding(false)} />}
       <Sidebar
         activePanel={panel}
         onNavigate={setPanel}
@@ -134,7 +168,7 @@ export default function ChatPage() {
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-3.5 border-b border-gray-100 shrink-0">
               <div>
-                <h1 className="font-semibold text-gray-900 text-sm">EduAssist Chat</h1>
+                <h1 className="font-semibold text-gray-900 text-sm">UpskillOS Chat</h1>
                 <p className="text-xs text-gray-400">
                   {streaming
                     ? runningTools.size > 0
@@ -156,6 +190,50 @@ export default function ChatPage() {
                     </div>
                   )
                 })()}
+
+                {/* ── Model selector ── */}
+                <div className="relative" ref={providerRef}>
+                  <button
+                    onClick={() => setProviderOpen(o => !o)}
+                    disabled={streaming}
+                    className="flex items-center gap-1.5 text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition-colors"
+                  >
+                    <span className={`font-medium ${PROVIDERS.find(p => p.id === provider)?.color}`}>
+                      {PROVIDERS.find(p => p.id === provider)?.label}
+                    </span>
+                    <span className="text-gray-400 hidden sm:inline">
+                      · {PROVIDERS.find(p => p.id === provider)?.sub}
+                    </span>
+                    <ChevronDown size={12} className="text-gray-400" />
+                  </button>
+                  {providerOpen && (
+                    <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1 overflow-hidden">
+                      {PROVIDERS.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            setProvider(p.id)
+                            localStorage.setItem('upskill_provider', p.id)
+                            setProviderOpen(false)
+                          }}
+                          className={`w-full text-left px-3 py-2.5 hover:bg-gray-50 transition-colors ${
+                            provider === p.id ? 'bg-gray-50' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={`text-sm font-medium ${p.color}`}>{p.label}</span>
+                            {p.tools
+                              ? <span className="text-[10px] bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full leading-none">tools</span>
+                              : <span className="text-[10px] bg-gray-50 text-gray-400 border border-gray-200 px-1.5 py-0.5 rounded-full leading-none">chat only</span>
+                            }
+                          </div>
+                          <div className="text-xs text-gray-400 mt-0.5">{p.sub}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <button
                   onClick={clearChat}
                   className="btn-ghost text-xs py-1.5 px-3 text-gray-500"
@@ -198,10 +276,12 @@ export default function ChatPage() {
         )}
 
         {/* ── OTHER PANELS ── */}
-        {panel === 'courses'     && <CoursesPanel />}
-        {panel === 'papers'      && <PapersPanel />}
-        {panel === 'flashcards'  && <FlashcardsPanel />}
-        {panel === 'collaborate' && <CollaboratePanel />}
+        {panel === 'learningpath' && <LearningPathPanel />}
+        {panel === 'profile'      && <ProfilePanel />}
+        {panel === 'courses'      && <CoursesPanel />}
+        {panel === 'papers'       && <PapersPanel />}
+        {panel === 'flashcards'   && <FlashcardsPanel />}
+        {panel === 'collaborate'  && <CollaboratePanel />}
       </main>
     </div>
   )

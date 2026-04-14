@@ -103,22 +103,36 @@ def _get_collection():
     return collection
 
 
-@lru_cache(maxsize=1)
-def _get_gemini_client() -> genai.Client:
-    return genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-
-
 def _embed_query(query: str) -> list:
-    """Embed a search query using Gemini API (RETRIEVAL_QUERY task type)."""
-    result = _get_gemini_client().models.embed_content(
-        model=GEMINI_EMBED_MODEL,
-        contents=query,
-        config=types.EmbedContentConfig(
-            task_type="RETRIEVAL_QUERY",
-            output_dimensionality=EMBED_DIM,
-        ),
-    )
-    return list(result.embeddings[0].values)
+    """Embed a search query using Gemini API (RETRIEVAL_QUERY task type).
+    Rotates through backup API keys on 429/503 errors.
+    """
+    from backend.core.key_manager import get_all_keys
+    keys = get_all_keys()
+    last_exc = None
+    for i, key in enumerate(keys):
+        try:
+            client = genai.Client(api_key=key)
+            result = client.models.embed_content(
+                model=GEMINI_EMBED_MODEL,
+                contents=query,
+                config=types.EmbedContentConfig(
+                    task_type="RETRIEVAL_QUERY",
+                    output_dimensionality=EMBED_DIM,
+                ),
+            )
+            return list(result.embeddings[0].values)
+        except Exception as exc:
+            last_exc = exc
+            msg = str(exc)
+            if ("503" in msg or "429" in msg) and i < len(keys) - 1:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Embed key %d failed (%s), trying key %d...", i + 1, exc, i + 2
+                )
+                continue
+            raise
+    raise last_exc
 
 
 class CourseRetriever:

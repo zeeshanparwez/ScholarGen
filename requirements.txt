@@ -23,6 +23,11 @@ filetype==1.2.0
 frozenlist==1.7.0
 fsspec==2025.9.0
 google-ai-generativelanguage==0.6.18
+groq==0.37.1
+openai==1.109.1
+langchain-openai==0.2.14
+tiktoken==0.12.0
+langchain-groq==0.2.5
 google-api-core==2.25.1
 google-auth==2.40.3
 google-genai==1.72.0

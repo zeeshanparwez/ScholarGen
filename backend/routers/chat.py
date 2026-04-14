@@ -1,6 +1,8 @@
+import asyncio
 import datetime
+import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -10,22 +12,45 @@ from backend.core.database import upsert_profile
 from backend.core.collaboration import extract_profile_from_text
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class ChatRequest(BaseModel):
     message: str
+    provider: str = "gemini"   # "gemini" | "groq"
+
+
+@router.get("/providers")
+async def list_providers(username: str = Depends(get_current_user)):
+    """Returns which LLM providers are currently available."""
+    return {"providers": chatbot_service.available_providers}
+
+
+def _update_profile_bg(username: str, text: str):
+    """Run profile extraction and DB update in a thread (non-blocking)."""
+    try:
+        profile = extract_profile_from_text(text)
+        upsert_profile(
+            username=username,
+            interests=profile.get("interests", []),
+            skills=profile.get("skills", []),
+            last_updated=datetime.datetime.now().isoformat(),
+        )
+    except Exception as exc:
+        logger.debug("Profile update skipped for %s: %s", username, exc)
 
 
 @router.post("/stream")
 async def stream_chat(
     body: ChatRequest,
+    background_tasks: BackgroundTasks,
     username: str = Depends(get_current_user),
 ):
     """SSE endpoint — streams tokens as they are generated."""
 
     async def generate():
         full_response = []
-        async for chunk in chatbot_service.stream_chat(username, body.message):
+        async for chunk in chatbot_service.stream_chat(username, body.message, body.provider):
             yield chunk
             # Collect tokens to build full response for profile extraction
             if '"type":"token"' in chunk:
@@ -37,25 +62,19 @@ async def stream_chat(
                 except Exception:
                     pass
 
-        # After streaming completes, update user profile in background
-        try:
-            combined = body.message + "\n" + "".join(full_response)
-            profile = extract_profile_from_text(combined)
-            upsert_profile(
-                username=username,
-                interests=profile.get("interests", []),
-                skills=profile.get("skills", []),
-                last_updated=datetime.datetime.now().isoformat(),
-            )
-        except Exception:
-            pass  # Profile update is non-critical
+        # Fire-and-forget: profile extraction runs in a thread after stream ends
+        # so it never blocks the event loop (avoids freezing if Gemini is down)
+        combined = body.message + "\n" + "".join(full_response)
+        asyncio.get_event_loop().run_in_executor(
+            None, _update_profile_bg, username, combined
+        )
 
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",       # Disable nginx buffering
+            "X-Accel-Buffering": "no",
             "Access-Control-Allow-Origin": "*",
         },
     )

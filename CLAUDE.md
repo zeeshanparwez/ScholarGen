@@ -1,6 +1,6 @@
-# ScholarGen (EduAssist)
+# UpskillOS (ScholarGen)
 
-AI-powered educational research and learning assistant — FastAPI backend + React frontend.
+AI-powered upskilling and talent intelligence platform — FastAPI backend + React frontend.
 
 ## Quick Start
 
@@ -16,7 +16,7 @@ GOOGLE_API_KEY=<your_google_genai_key>
 JWT_SECRET_KEY=<any_random_secret_string>
 COURSE_DATA_PATH=/absolute/path/to/Data/nptel_courses_with_embeddings.xlsx
 # Optional:
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-3.1-flash-lite-preview
 EMBEDDING_MODEL=BAAI/bge-base-en-v1.5
 ```
 
@@ -55,12 +55,14 @@ cd frontend && npm run dev
 ```
 Browser (React + Tailwind)
   └── /api/* → FastAPI (uvicorn :8000)
-        ├── /api/auth        — JWT login/signup (bcrypt + SQLite)
-        ├── /api/chat/stream — SSE token-by-token streaming
-        ├── /api/courses     — NPTEL semantic search (ChromaDB)
-        ├── /api/papers      — arXiv search
-        ├── /api/flashcards  — GATE MCQ generation (Gemini)
-        └── /api/collaborate — User matching (embeddings)
+        ├── /api/auth           — JWT login/signup (bcrypt + SQLite)
+        ├── /api/chat/stream    — SSE token-by-token streaming
+        ├── /api/courses        — NPTEL semantic search (ChromaDB)
+        ├── /api/papers         — arXiv search
+        ├── /api/flashcards     — Skill assessment MCQ generation (Gemini)
+        ├── /api/collaborate    — Talent network matching (embeddings)
+        ├── /api/learningpath   — Role-based learning path generator (Gemini)
+        └── /api/profile        — User skill profile GET/PUT
 
 ChatbotService (singleton)
   └── LangGraph ReAct agent (create_react_agent)
@@ -79,12 +81,14 @@ ChatbotService (singleton)
 | `backend/dependencies.py` | `get_current_user` FastAPI dependency |
 | `backend/routers/` | auth, chat, courses, papers, flashcards, collaborate |
 | `backend/services/chatbot_service.py` | Singleton LangGraph agent service |
-| `database.py` | SQLite layer (users + profiles, bcrypt, WAL mode) |
-| `agent_orchestrator.py` | MCPSessionManager, LangGraph agent builder |
-| `course_retriever.py` | ChromaDB in-memory NPTEL semantic search |
-| `research_mcp.py` | FastMCP server — arXiv search + ChromaDB paper cache |
-| `collaboration.py` | User profile matching + Gemini profile extraction |
-| `flashcards.py` | GATE MCQ generation via Gemini |
+| `backend/core/database.py` | SQLite layer (users + profiles, bcrypt, WAL mode) |
+| `backend/agent_orchestrator.py` | MCPSessionManager, LangGraph agent builder |
+| `backend/core/course_retriever.py` | ChromaDB in-memory NPTEL semantic search |
+| `backend/mcp/research_mcp.py` | FastMCP server — arXiv search + ChromaDB paper cache |
+| `backend/core/collaboration.py` | Talent network matching + Gemini profile extraction |
+| `backend/core/flashcards.py` | Skill assessment MCQ generation via Gemini |
+| `backend/routers/learningpath.py` | Learning path generator — skill gaps + phased roadmap |
+| `backend/routers/profile.py` | User skill profile CRUD |
 | `frontend/src/` | React app (Vite + Tailwind) |
 | `frontend/src/api.js` | API client with SSE stream parser |
 | `frontend/src/pages/` | LoginPage, ChatPage |

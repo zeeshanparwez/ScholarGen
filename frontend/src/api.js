@@ -51,13 +51,15 @@ export const chat = {
    * Stream a chat message.
    * Calls onToken(str), onToolCall(tool, status), onDone(), onError(str).
    */
-  stream: async (message, { onToken, onToolCall, onDone, onError }) => {
+  providers: () => request('/chat/providers'),
+
+  stream: async (message, { onToken, onToolCall, onDone, onError, provider = 'gemini' }) => {
     let res
     try {
       res = await fetch(`${BASE}/chat/stream`, {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, provider }),
       })
     } catch (e) {
       onError(e.message)
@@ -126,4 +128,21 @@ export const flashcards = {
 
 export const collaborate = {
   match: () => request('/collaborate'),
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+
+export const profile = {
+  get: () => request('/profile'),
+  update: (data) => request('/profile', { method: 'PUT', body: JSON.stringify(data) }),
+}
+
+// ── Learning Path ─────────────────────────────────────────────────────────────
+
+export const learningpath = {
+  generate: (current_role, target_role, job_description = null) =>
+    request('/learningpath/generate', {
+      method: 'POST',
+      body: JSON.stringify({ current_role, target_role, job_description }),
+    }),
 }

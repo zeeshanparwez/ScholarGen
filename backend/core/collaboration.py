@@ -3,10 +3,9 @@ import os
 
 import numpy as np
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
+from openai import OpenAI
 from sklearn.metrics.pairwise import cosine_similarity
 
 from backend.core.database import get_all_profiles, get_profile, upsert_profile
@@ -16,11 +15,14 @@ _FILE_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(os.path.dirname(_FILE_DIR))
 load_dotenv(os.path.join(BASE_DIR, "Config", ".env"))
 
-GEMINI_EMBED_MODEL = "gemini-embedding-2-preview"
-EMBED_DIM = 768
+# NIM embeddings — saves Gemini embedding quota (was at 84% of free tier)
+NIM_EMBED_MODEL = "baai/bge-m3"
+NIM_BASE_URL = os.environ.get("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
 
+from backend.core.key_manager import get_api_key
 llm = ChatGoogleGenerativeAI(
     model=os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview"),
+    google_api_key=get_api_key(0),
     temperature=0.7,
     max_retries=2,
     model_kwargs={
@@ -65,18 +67,55 @@ def _profile_to_text(profile: dict) -> str:
 
 
 def _compute_embeddings(profiles: list) -> np.ndarray:
-    """Embed all user profiles in a single Gemini batch call."""
+    """Embed all user profiles via NVIDIA NIM (baai/bge-m3).
+    Falls back to Gemini key rotation if NIM key is unavailable.
+    """
+    import logging
     texts = [_profile_to_text(p) for p in profiles]
-    client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-    result = client.models.embed_content(
-        model=GEMINI_EMBED_MODEL,
-        contents=texts,
-        config=types.EmbedContentConfig(
-            task_type="SEMANTIC_SIMILARITY",
-            output_dimensionality=EMBED_DIM,
-        ),
-    )
-    return np.array([e.values for e in result.embeddings], dtype=np.float32)
+
+    nim_key = os.environ.get("NIM_API_KEY", "")
+    if nim_key:
+        try:
+            client = OpenAI(base_url=NIM_BASE_URL, api_key=nim_key)
+            response = client.embeddings.create(
+                input=texts,
+                model=NIM_EMBED_MODEL,
+                encoding_format="float",
+            )
+            return np.array([e.embedding for e in response.data], dtype=np.float32)
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "NIM embedding failed, falling back to Gemini: %s", exc
+            )
+
+    # Fallback: Gemini embeddings with key rotation
+    from google import genai as gai
+    from google.genai import types as gtypes
+    from backend.core.key_manager import get_all_keys
+    keys = get_all_keys()
+    last_exc = None
+    for i, key in enumerate(keys):
+        try:
+            gclient = gai.Client(api_key=key)
+            result = gclient.models.embed_content(
+                model="gemini-embedding-2-preview",
+                contents=texts,
+                config=gtypes.EmbedContentConfig(
+                    task_type="SEMANTIC_SIMILARITY",
+                    output_dimensionality=768,
+                ),
+            )
+            return np.array([e.values for e in result.embeddings], dtype=np.float32)
+        except Exception as exc:
+            last_exc = exc
+            msg = str(exc)
+            if ("503" in msg or "429" in msg) and i < len(keys) - 1:
+                logging.getLogger(__name__).warning(
+                    "Collab embed key %d failed (%s), trying key %d...", i + 1, exc, i + 2
+                )
+                continue
+            raise
+    raise last_exc
 
 
 # ── Collaboration logic ───────────────────────────────────────────────────────

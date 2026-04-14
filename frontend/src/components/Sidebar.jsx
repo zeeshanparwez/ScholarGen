@@ -1,4 +1,4 @@
-import { GraduationCap, MessageSquare, BookOpen, FileText, Zap, Users, LogOut, ChevronRight, Search, Globe, Youtube, Database, BookMarked } from 'lucide-react'
+import { Zap, MessageSquare, BookOpen, FileText, Users, LogOut, ChevronRight, Search, Globe, Youtube, Database, BookMarked, Map, User } from 'lucide-react'
 import clsx from 'clsx'
 
 const TOOL_META = {
@@ -11,11 +11,13 @@ const TOOL_META = {
 }
 
 const NAV = [
-  { id: 'chat',       label: 'Chat',            icon: MessageSquare },
-  { id: 'courses',    label: 'NPTEL Courses',   icon: BookOpen },
-  { id: 'papers',     label: 'Research Papers', icon: FileText },
-  { id: 'flashcards', label: 'GATE Flashcards', icon: Zap },
-  { id: 'collaborate',label: 'Collaborate',     icon: Users },
+  { id: 'chat',         label: 'AI Assistant',      icon: MessageSquare },
+  { id: 'learningpath', label: 'Learning Path',      icon: Map },
+  { id: 'courses',      label: 'Course Library',     icon: BookOpen },
+  { id: 'papers',       label: 'Industry Insights',  icon: FileText },
+  { id: 'flashcards',   label: 'Skill Assessment',   icon: Zap },
+  { id: 'collaborate',  label: 'Talent Network',     icon: Users },
+  { id: 'profile',      label: 'My Profile',         icon: User },
 ]
 
 export default function Sidebar({ activePanel, onNavigate, onLogout, username, toolsActive }) {
@@ -24,9 +26,9 @@ export default function Sidebar({ activePanel, onNavigate, onLogout, username, t
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 py-4 border-b border-gray-200">
         <div className="w-8 h-8 bg-accent-600 rounded-lg flex items-center justify-center">
-          <GraduationCap size={18} className="text-white" strokeWidth={2} />
+          <Zap size={18} className="text-white" strokeWidth={2} />
         </div>
-        <span className="font-semibold text-gray-900 tracking-tight">ScholarGen</span>
+        <span className="font-semibold text-gray-900 tracking-tight">UpskillOS</span>
       </div>
 
       {/* Navigation */}

@@ -45,10 +45,18 @@ def init_db():
                 username     TEXT PRIMARY KEY REFERENCES users(username),
                 interests    TEXT NOT NULL DEFAULT '[]',
                 skills       TEXT NOT NULL DEFAULT '[]',
+                current_role TEXT NOT NULL DEFAULT '',
+                target_role  TEXT NOT NULL DEFAULT '',
                 last_updated TEXT
             )
             """
         )
+        # Migration: add columns to existing databases that predate this schema
+        for col, default in [("current_role", "''"), ("target_role", "''")]:
+            try:
+                conn.execute(f"ALTER TABLE user_profiles ADD COLUMN {col} TEXT NOT NULL DEFAULT {default}")
+            except Exception:
+                pass  # column already exists
 
 
 @contextmanager
@@ -98,19 +106,28 @@ def verify_user(username: str, password: str):
 
 # ── Profiles ──────────────────────────────────────────────────────────────────
 
-def upsert_profile(username: str, interests: list, skills: list, last_updated: str):
+def upsert_profile(
+    username: str,
+    interests: list,
+    skills: list,
+    last_updated: str,
+    current_role: str = "",
+    target_role: str = "",
+):
     """Atomically insert or update a user's profile."""
     with _conn() as conn:
         conn.execute(
             """
-            INSERT INTO user_profiles (username, interests, skills, last_updated)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO user_profiles (username, interests, skills, current_role, target_role, last_updated)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(username) DO UPDATE SET
                 interests    = excluded.interests,
                 skills       = excluded.skills,
+                current_role = CASE WHEN excluded.current_role != '' THEN excluded.current_role ELSE current_role END,
+                target_role  = CASE WHEN excluded.target_role != '' THEN excluded.target_role ELSE target_role END,
                 last_updated = excluded.last_updated
             """,
-            (username, json.dumps(interests), json.dumps(skills), last_updated),
+            (username, json.dumps(interests), json.dumps(skills), current_role, target_role, last_updated),
         )
 
 
@@ -126,6 +143,8 @@ def get_profile(username: str):
         "username": row["username"],
         "interests": json.loads(row["interests"]),
         "skills": json.loads(row["skills"]),
+        "current_role": row["current_role"] or "",
+        "target_role": row["target_role"] or "",
         "last_updated": row["last_updated"],
     }
 
@@ -139,6 +158,8 @@ def get_all_profiles() -> list:
             "username": row["username"],
             "interests": json.loads(row["interests"]),
             "skills": json.loads(row["skills"]),
+            "current_role": row["current_role"] or "",
+            "target_role": row["target_role"] or "",
             "last_updated": row["last_updated"],
         }
         for row in rows

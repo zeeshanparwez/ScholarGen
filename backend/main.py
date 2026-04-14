@@ -21,7 +21,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
-from backend.routers import auth, chat, courses, papers, flashcards, collaborate
+from backend.routers import auth, chat, courses, papers, flashcards, collaborate, learningpath, profile
 from backend.services.chatbot_service import chatbot_service
 
 
@@ -52,7 +52,9 @@ app.include_router(chat.router,        prefix="/api/chat",        tags=["chat"])
 app.include_router(courses.router,     prefix="/api/courses",     tags=["courses"])
 app.include_router(papers.router,      prefix="/api/papers",      tags=["papers"])
 app.include_router(flashcards.router,  prefix="/api/flashcards",  tags=["flashcards"])
-app.include_router(collaborate.router, prefix="/api/collaborate", tags=["collaborate"])
+app.include_router(collaborate.router,   prefix="/api/collaborate",   tags=["collaborate"])
+app.include_router(learningpath.router,  prefix="/api/learningpath",  tags=["learningpath"])
+app.include_router(profile.router,       prefix="/api/profile",       tags=["profile"])
 
 # Serve React build — only mounted if the build exists.
 # Run `npm run build` in frontend/ first.
