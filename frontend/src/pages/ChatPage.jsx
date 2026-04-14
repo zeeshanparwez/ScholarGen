@@ -15,7 +15,7 @@ import ChatMessage from '../components/ChatMessage'
 import ChatInput from '../components/ChatInput'
 import CoursesPanel from '../components/CoursesPanel'
 import PapersPanel from '../components/PapersPanel'
-import FlashcardsPanel from '../components/FlashcardModal'
+import SkillAssessmentPanel from '../components/FlashcardModal'
 import CollaboratePanel from '../components/CollaboratePanel'
 import LearningPathPanel from '../components/LearningPathPanel'
 import ProfilePanel from '../components/ProfilePanel'
@@ -23,6 +23,7 @@ import OnboardingModal from '../components/OnboardingModal'
 import CareerPanel from '../components/CareerPanel'
 import BookmarksPanel from '../components/BookmarksPanel'
 import ProgressPanel from '../components/ProgressPanel'
+import AnalyticsPanel from '../components/AnalyticsPanel'
 import PomodoroTimer from '../components/PomodoroTimer'
 import { chat, profile as profileApi } from '../api'
 
@@ -309,11 +310,12 @@ export default function ChatPage() {
         {panel === 'profile'      && <ProfilePanel />}
         {panel === 'courses'      && <CoursesPanel />}
         {panel === 'papers'       && <PapersPanel />}
-        {panel === 'flashcards'   && <FlashcardsPanel />}
+        {panel === 'flashcards'   && <SkillAssessmentPanel />}
         {panel === 'collaborate'  && <CollaboratePanel />}
         {panel === 'career'       && <CareerPanel onNavigate={setPanel} />}
         {panel === 'bookmarks'    && <BookmarksPanel />}
         {panel === 'progress'     && <ProgressPanel />}
+        {panel === 'analytics'    && <AnalyticsPanel />}
       </main>
     </div>
   )

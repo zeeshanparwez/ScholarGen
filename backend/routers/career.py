@@ -7,9 +7,10 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+from io import BytesIO
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from openai import OpenAI as _NimSync
@@ -34,17 +35,11 @@ _llm = ChatGoogleGenerativeAI(
 )
 
 
-def _invoke_llm(prompt: str) -> str:
-    """Gemini first; fall back to NIM on quota/overload."""
-    try:
-        return _llm.invoke([HumanMessage(content=prompt)]).content.strip()
-    except Exception as e:
-        msg = str(e)
-        if "429" in msg or "503" in msg or "quota" in msg.lower():
-            logger.warning("Gemini unavailable, falling back to NIM for career analysis")
-            nim_key = os.environ.get("NIM_API_KEY", "")
-            if not nim_key:
-                raise
+def _invoke_llm(prompt: str, max_tokens: int = 1024) -> str:
+    """NIM (Llama 3.3) first; Gemini as fallback."""
+    nim_key = os.environ.get("NIM_API_KEY", "")
+    if nim_key:
+        try:
             client = _NimSync(
                 base_url=os.environ.get("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"),
                 api_key=nim_key,
@@ -53,10 +48,12 @@ def _invoke_llm(prompt: str) -> str:
                 model=os.environ.get("NIM_MODEL", "meta/llama-3.3-70b-instruct"),
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=1024,
+                max_tokens=max_tokens,
             )
             return r.choices[0].message.content.strip()
-        raise
+        except Exception as e:
+            logger.warning("NIM failed, falling back to Gemini: %s", str(e)[:100])
+    return _llm.invoke([HumanMessage(content=prompt)]).content.strip()
 
 
 def _parse_json(text: str) -> dict:
@@ -213,6 +210,35 @@ Be concise and learning-focused."""
     except Exception as e:
         logger.error("Playlist guide generation failed: %s", e)
         return {"error": "Guide generation failed. Please try again."}
+
+
+@router.post("/parse-pdf")
+async def parse_pdf(
+    file: UploadFile = File(...),
+    username: str = Depends(get_current_user),
+):
+    """Extract plain text from an uploaded PDF file."""
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="PDF too large. Maximum size is 10 MB.")
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(BytesIO(content))
+        pages_text = [page.extract_text() or "" for page in reader.pages]
+        text = "\n\n".join(t for t in pages_text if t.strip())
+        if not text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract text. Make sure the PDF contains selectable text (not a scanned image).",
+            )
+        return {"text": text.strip(), "pages": len(reader.pages)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("PDF parsing error: %s", e)
+        raise HTTPException(status_code=500, detail=f"PDF parsing failed: {str(e)}")
 
 
 def _analyze_resume(text: str, username: str) -> dict:

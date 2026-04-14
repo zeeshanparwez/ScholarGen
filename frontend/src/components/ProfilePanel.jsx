@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { User, Zap, BookOpen, Plus, X, Save, Loader2, Linkedin, Copy, Check, Sparkles } from 'lucide-react'
+import { User, Zap, BookOpen, Plus, X, Save, Loader2, Copy, Check, Sparkles, Download, Target, TrendingUp, AlertCircle, ChevronRight } from 'lucide-react'
 import { profile as profileApi } from '../api'
 
 function TagList({ tags, onRemove, color = 'accent' }) {
@@ -67,6 +67,11 @@ export default function ProfilePanel() {
   const [bioError, setBioError]     = useState('')
   const [copiedField, setCopiedField] = useState(null)
 
+  // Role Readiness
+  const [readLoading, setReadLoading] = useState(false)
+  const [readResult, setReadResult]   = useState(null)
+  const [readError, setReadError]     = useState('')
+
   useEffect(() => {
     profileApi.get().then(d => {
       setData(d)
@@ -100,6 +105,19 @@ export default function ProfilePanel() {
       setBioError(e.message)
     } finally {
       setBioLoading(false)
+    }
+  }
+
+  const checkReadiness = async () => {
+    setReadLoading(true); setReadError(''); setReadResult(null)
+    try {
+      const d = await profileApi.readiness()
+      if (d.error) { setReadError(d.error); return }
+      setReadResult(d)
+    } catch (e) {
+      setReadError(e.message)
+    } finally {
+      setReadLoading(false)
     }
   }
 
@@ -236,6 +254,113 @@ export default function ProfilePanel() {
           {editing && <TagInput onAdd={t => !interests.includes(t) && setInterests([...interests, t])} placeholder="Add an interest…" />}
         </div>
 
+        {/* Role Readiness Score */}
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Target size={15} className="text-accent-500" />
+              <h3 className="text-sm font-semibold text-gray-800">Role Readiness Score</h3>
+            </div>
+            <button
+              onClick={checkReadiness}
+              disabled={readLoading}
+              className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+            >
+              {readLoading
+                ? <><Loader2 size={12} className="animate-spin" /> Analyzing…</>
+                : <><TrendingUp size={12} /> Check Readiness</>
+              }
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">
+            AI-scored readiness for your target role based on your current skills.
+          </p>
+
+          {readError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg flex items-center gap-2">
+              <AlertCircle size={12} /> {readError}
+            </p>
+          )}
+
+          {readResult && (() => {
+            const CIRC = 2 * Math.PI * 38
+            const offset = CIRC * (1 - readResult.score / 100)
+            const color = readResult.score >= 70 ? '#10b981' : readResult.score >= 40 ? '#f59e0b' : '#ef4444'
+            const label = readResult.score >= 70 ? 'Job Ready' : readResult.score >= 40 ? 'Progressing' : 'Early Stage'
+            return (
+              <div className="space-y-4 mt-1">
+                {/* Score ring + summary */}
+                <div className="flex items-center gap-5">
+                  <svg viewBox="0 0 100 100" width="96" height="96" className="shrink-0">
+                    <circle cx="50" cy="50" r="38" fill="none" stroke="#f3f4f6" strokeWidth="8" />
+                    <circle
+                      cx="50" cy="50" r="38" fill="none"
+                      stroke={color} strokeWidth="8"
+                      strokeDasharray={CIRC}
+                      strokeDashoffset={offset}
+                      strokeLinecap="round"
+                      transform="rotate(-90 50 50)"
+                      style={{ transition: 'stroke-dashoffset 1s ease' }}
+                    />
+                    <text x="50" y="46" textAnchor="middle" dominantBaseline="central"
+                      fontSize="18" fontWeight="bold" fill={color}>{readResult.score}%</text>
+                    <text x="50" y="64" textAnchor="middle" fontSize="9" fill="#9ca3af">{label}</text>
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-700 mb-1">
+                      {readResult.target_role || 'Target Role'}
+                    </p>
+                    <p className="text-xs text-gray-500 leading-relaxed">{readResult.summary}</p>
+                  </div>
+                </div>
+
+                {/* Matched skills */}
+                {readResult.matched_skills?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-1.5">You already have</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {readResult.matched_skills.map(s => (
+                        <span key={s} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full font-medium">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Missing skills */}
+                {readResult.missing_skills?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-1.5">Skills to build</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {readResult.missing_skills.map(s => (
+                        <span key={s} className="text-xs bg-red-50 text-red-600 border border-red-200 px-2.5 py-0.5 rounded-full font-medium">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Next actions */}
+                {readResult.next_actions?.length > 0 && (
+                  <div className="bg-accent-50 rounded-lg p-3 border border-accent-100">
+                    <p className="text-xs font-semibold text-accent-700 mb-2">Your next steps</p>
+                    <div className="space-y-1.5">
+                      {readResult.next_actions.map((a, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <ChevronRight size={11} className="text-accent-500 mt-0.5 shrink-0" />
+                          <p className="text-xs text-accent-800">{a}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+        </div>
+
         {/* LinkedIn Bio Generator */}
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3">
@@ -309,6 +434,27 @@ export default function ProfilePanel() {
                   <p className="text-sm text-gray-700 leading-relaxed">{bioResult.elevator_pitch}</p>
                 </div>
               )}
+
+              <button
+                onClick={() => {
+                  const content = [
+                    bioResult.headline && `HEADLINE\n${bioResult.headline}`,
+                    bioResult.bio && `\nABOUT / BIO\n${bioResult.bio}`,
+                    bioResult.elevator_pitch && `\nELEVATOR PITCH\n${bioResult.elevator_pitch}`,
+                  ].filter(Boolean).join('\n')
+                  const escaped = content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                  const win = window.open('', '_blank', 'width=800,height=600')
+                  if (!win) { alert('Allow popups to download as PDF.'); return }
+                  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>LinkedIn Bio</title>
+                  <style>body{font-family:Georgia,serif;max-width:700px;margin:48px auto;line-height:1.8;font-size:13px;color:#111;padding:0 24px}
+                  h2{font-size:15px;font-weight:bold;margin:24px 0 8px;border-bottom:1px solid #ddd;padding-bottom:6px}pre{white-space:pre-wrap;font-family:inherit}</style>
+                  </head><body><pre>${escaped}</pre><script>window.onload=()=>{window.print()}<\/script></body></html>`)
+                  win.document.close()
+                }}
+                className="flex items-center gap-1.5 text-xs text-accent-600 hover:text-accent-700 font-medium border border-accent-200 hover:border-accent-400 bg-accent-50 px-3 py-1.5 rounded-lg transition-colors w-full justify-center"
+              >
+                <Download size={13} /> Download as PDF
+              </button>
             </div>
           )}
         </div>

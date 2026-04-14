@@ -1,6 +1,7 @@
 """
-flashcards.py — GATE exam flashcard generator.
-Used directly by the FastAPI backend router (backend/routers/flashcards.py).
+flashcards.py — Skill Assessment quiz generator.
+Generates MCQ-style questions for any technical skill/topic.
+Used by backend/routers/flashcards.py.
 """
 
 import json
@@ -10,262 +11,226 @@ from typing import List, Dict
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
+from openai import OpenAI as _NimClient
 
-# Project root is 2 levels up from this file (backend/core/ → backend/ → ScholarGen/)
 _FILE_DIR = os.path.dirname(os.path.abspath(__file__))
 _BASE_DIR = os.path.dirname(os.path.dirname(_FILE_DIR))
 load_dotenv(os.path.join(_BASE_DIR, "Config", ".env"))
 
-# ============== GATE SPECIALIZATIONS CONFIG ==============
+# ── Skill Categories (replaces GATE specializations) ──────────────────────────
 
-GATE_SPECIALIZATIONS = {
-    "Computer Science and Information Technology (CS)": [
-        "Engineering Mathematics",
-        "Digital Logic",
-        "Computer Organization and Architecture",
-        "Programming and Data Structures",
-        "Algorithms",
-        "Theory of Computation",
-        "Compiler Design",
+SKILL_CATEGORIES = {
+    "Frontend Development": [
+        "HTML & CSS",
+        "JavaScript (Core)",
+        "React",
+        "TypeScript",
+        "Vue / Angular",
+        "Web Performance & Accessibility",
+        "Frontend Testing",
+    ],
+    "Backend Development": [
+        "Python (FastAPI / Django / Flask)",
+        "Node.js (Express)",
+        "REST API Design",
+        "Databases & SQL",
+        "Authentication & Security",
+        "Caching & Queues",
+        "System Design Basics",
+    ],
+    "Data Science & ML": [
+        "Python for Data Science",
+        "Statistics & Probability",
+        "Machine Learning Fundamentals",
+        "Deep Learning & Neural Networks",
+        "NLP & LLMs",
+        "Data Visualization",
+        "MLOps & Model Deployment",
+    ],
+    "Cloud & DevOps": [
+        "AWS Core Services",
+        "Azure / GCP",
+        "Docker & Containers",
+        "Kubernetes",
+        "CI/CD Pipelines",
+        "Infrastructure as Code (Terraform)",
+        "Monitoring & Observability",
+    ],
+    "Mobile Development": [
+        "React Native",
+        "Flutter",
+        "iOS (Swift)",
+        "Android (Kotlin)",
+    ],
+    "Cybersecurity": [
+        "Web Security (OWASP Top 10)",
+        "Network Security",
+        "Cryptography",
+        "Cloud Security",
+        "Secure Coding Practices",
+    ],
+    "Database Engineering": [
+        "SQL & Query Optimization",
+        "PostgreSQL",
+        "MongoDB",
+        "Redis",
+        "Database Design & Normalization",
+        "Data Warehousing",
+    ],
+    "System Design": [
+        "Architecture Patterns",
+        "Microservices",
+        "Scalability & Load Balancing",
+        "API Design & GraphQL",
+        "Distributed Systems",
+        "Caching Strategies",
+    ],
+    "General CS Fundamentals": [
+        "Algorithms & Data Structures",
+        "Design Patterns",
         "Operating Systems",
-        "Databases",
-        "Computer Networks"
+        "Computer Networks",
+        "Compilers & Language Theory",
     ],
-
-    "Electronics and Communication Engineering (EC)": [
-        "Engineering Mathematics",
-        "Networks",
-        "Signals and Systems",
-        "Electronic Devices",
-        "Analog Circuits",
-        "Digital Circuits",
-        "Control Systems",
-        "Communications",
-        "Electromagnetics"
-    ],
-
-    "Electrical Engineering (EE)": [
-        "Engineering Mathematics",
-        "Electric Circuits",
-        "Electromagnetic Fields",
-        "Signals and Systems",
-        "Electrical Machines",
-        "Power Systems",
-        "Control Systems",
-        "Electrical and Electronic Measurements",
-        "Power Electronics"
-    ],
-
-    "Mechanical Engineering (ME)": [
-        "Engineering Mathematics",
-        "Applied Mechanics and Design",
-        "Fluid Mechanics and Thermal Sciences",
-        "Materials, Manufacturing and Industrial Engineering",
-        "Strength of Materials",
-        "Theory of Machines",
-        "Thermodynamics",
-        "Heat Transfer",
-        "Production Engineering"
-    ],
-
-    "Civil Engineering (CE)": [
-        "Engineering Mathematics",
-        "Structural Engineering",
-        "Geotechnical Engineering",
-        "Water Resources Engineering",
-        "Environmental Engineering",
-        "Transportation Engineering",
-        "Geomatics Engineering"
-    ],
-
-    "Data Science and Artificial Intelligence (DS & AI)": [
-        "Linear Algebra",
-        "Probability and Statistics",
-        "Calculus",
-        "Programming",
-        "Data Structures and Algorithms",
-        "Database Management",
-        "Machine Learning",
-        "Artificial Intelligence",
-        "Data Analytics",
-        "Web Technologies"
-    ],
-
-    "Chemical Engineering (CH)": [
-        "Engineering Mathematics",
-        "Process Calculations",
-        "Fluid Mechanics",
-        "Heat Transfer",
-        "Mass Transfer",
-        "Chemical Reaction Engineering",
-        "Instrumentation and Process Control",
-        "Plant Design and Economics"
-    ],
-
-    "Instrumentation Engineering (IN)": [
-        "Engineering Mathematics",
-        "Electrical Circuits",
-        "Signals and Systems",
-        "Transducers",
-        "Process Control",
-        "Analog Electronics",
-        "Digital Electronics",
-        "Measurements"
-    ],
-
-    "Aerospace Engineering (AE)": [
-        "Engineering Mathematics",
-        "Flight Mechanics",
-        "Aerodynamics",
-        "Structures",
-        "Propulsion",
-        "Space Dynamics"
-    ],
-
-    "Biotechnology (BT)": [
-        "Engineering Mathematics",
-        "Biochemistry",
-        "Microbiology",
-        "Cell Biology",
-        "Immunology",
-        "Genetics",
-        "Process Biotechnology",
-        "Plant and Animal Biotechnology"
-    ]
 }
 
-# ============== HELPER FUNCTIONS ==============
 
 def get_specializations() -> List[str]:
-    """Get list of available GATE specializations"""
-    return list(GATE_SPECIALIZATIONS.keys())
+    return list(SKILL_CATEGORIES.keys())
 
 
-def get_subjects(specialization: str) -> List[str]:
-    """Get subjects for a given specialization"""
-    return GATE_SPECIALIZATIONS.get(specialization, [])
+def get_subjects(skill_area: str) -> List[str]:
+    return SKILL_CATEGORIES.get(skill_area, [])
 
 
-# ============== FLASHCARD GENERATOR CLASS ==============
+# ── Skill Quiz Generator ───────────────────────────────────────────────────────
 
-class GATEFlashcardGenerator:
-    """Generate GATE exam flashcards using Gemini LLM"""
+class SkillQuizGenerator:
+    """Generate skill-assessment MCQs. NIM (Llama 3.3) first, Gemini fallback."""
 
     def __init__(self):
-        self.llm = ChatGoogleGenerativeAI(
+        self._nim_key  = os.environ.get("NIM_API_KEY", "")
+        self._nim_base = os.environ.get("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+        self._nim_model = os.environ.get("NIM_MODEL", "meta/llama-3.3-70b-instruct")
+        self._gemini = ChatGoogleGenerativeAI(
             model=os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview"),
-            temperature=0.3,
-            max_retries=2,
+            temperature=0.4,
+            max_retries=1,
             model_kwargs={
-                "generation_config": {
-                    "thinking_config": {"thinking_budget": 0}
-                }
+                "generation_config": {"thinking_config": {"thinking_budget": 0}}
             },
         )
 
+    def _call_nim(self, prompt: str) -> str:
+        if not self._nim_key:
+            raise RuntimeError("NIM_API_KEY not configured")
+        client = _NimClient(base_url=self._nim_base, api_key=self._nim_key)
+        r = client.chat.completions.create(
+            model=self._nim_model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=2048,
+        )
+        return r.choices[0].message.content.strip()
+
+    def _call_gemini(self, prompt: str) -> str:
+        response = self._gemini.invoke([HumanMessage(content=prompt)])
+        return response.content.strip()
+
     def generate_flashcards(
         self,
-        specialization: str,
-        subject: str,
+        skill_area: str,
+        sub_area: str,
         topic: str,
-        num_questions: int = 5
+        num_questions: int = 5,
     ) -> List[Dict]:
-        """
-        Generate MCQ flashcards for GATE preparation.
+        prompt = self._build_prompt(skill_area, sub_area, topic, num_questions)
 
-        Returns:
-            List of flashcard dicts with question, options, correct_index, explanation
-        """
-        prompt = self._build_prompt(specialization, subject, topic, num_questions)
-        max_retries = 2
+        # Try NIM first
+        try:
+            raw = self._call_nim(prompt)
+            cards = self._parse_response(raw)
+            if cards:
+                return cards
+            print("NIM returned no parseable cards, falling back to Gemini")
+        except Exception as e:
+            print(f"NIM failed ({e}), falling back to Gemini")
 
-        for attempt in range(max_retries):
-            try:
-                import signal
-
-                def _timeout_handler(signum, frame):
-                    raise TimeoutError("Flashcard generation timed out")
-
-                signal.signal(signal.SIGALRM, _timeout_handler)
-                signal.alarm(30)
-                try:
-                    response = self.llm.invoke([HumanMessage(content=prompt)])
-                finally:
-                    signal.alarm(0)
-
-                flashcards = self._parse_response(response.content)
-                if flashcards:
-                    return flashcards
-            except TimeoutError:
-                print(f"Flashcard generation timed out (attempt {attempt + 1}/{max_retries})")
-            except Exception as e:
-                print(f"Flashcard generation error (attempt {attempt + 1}/{max_retries}): {e}")
+        # Gemini fallback
+        try:
+            raw = self._call_gemini(prompt)
+            cards = self._parse_response(raw)
+            if cards:
+                return cards
+            print("Gemini also returned no parseable cards")
+        except Exception as e:
+            print(f"Gemini also failed: {e}")
 
         return []
 
-    def _build_prompt(self, specialization: str, subject: str, topic: str, num: int) -> str:
-        return f"""You are a GATE exam preparation expert.
+    def _build_prompt(self, skill_area: str, sub_area: str, topic: str, num: int) -> str:
+        return f"""You are a senior technical interviewer and skill assessment expert.
 
-Generate {num} high-quality multiple-choice questions for GATE examination on:
+Generate {num} high-quality multiple-choice questions to assess proficiency in:
 
-**Specialization**: {specialization}
-**Subject**: {subject}
+**Skill Area**: {skill_area}
+**Sub-area**: {sub_area}
 **Topic**: {topic}
 
-**Requirements**:
-1. Each question must have exactly 4 options (A, B, C, D)
-2. Questions should match GATE difficulty level (conceptual + numerical/problem-solving)
-3. Mark exactly ONE correct option (index 0-3)
-4. Provide brief explanation for correct answer
-5. Mix question types: conceptual, numerical, and application-based
-6. Ensure options are technically sound and non-ambiguous
+Requirements:
+1. Each question must have exactly 4 answer options
+2. Mix question types: conceptual understanding, practical/code-based, and scenario/tradeoff questions
+3. Mark exactly ONE correct option (index 0–3, zero-based)
+4. Provide a clear, educational explanation for the correct answer
+5. Questions should match real interview and technical assessment standards
+6. Avoid trivial or overly obvious questions — test real understanding
 
-**Output Format** (JSON only, no extra text):
+Output ONLY valid JSON, no extra text:
 
 {{
   "flashcards": [
     {{
-      "question": "What is the time complexity of Dijkstra's algorithm using binary heap?",
-      "options": ["O(V log V)", "O((V+E) log V)", "O(V²)", "O(E log V)"],
-      "correct_index": 1,
-      "explanation": "Using binary heap, each decrease-key operation takes O(log V) and occurs E times, giving O((V+E) log V)"
+      "question": "What is the time complexity of Array.prototype.includes() in JavaScript?",
+      "options": ["O(1)", "O(log n)", "O(n)", "O(n²)"],
+      "correct_index": 2,
+      "explanation": "Array.includes() does a linear scan through the array, making it O(n) in the worst case. Use a Set for O(1) lookups."
     }}
   ]
 }}
 
-Generate {num} questions now in this exact JSON format."""
+Generate {num} questions now."""
 
-    def _parse_response(self, raw_response: str) -> List[Dict]:
+    def _parse_response(self, raw: str) -> List[Dict]:
         try:
-            raw = raw_response.strip()
-            start = raw.find("{")
-            end = raw.rfind("}") + 1
+            text = raw.strip()
+            start, end = text.find("{"), text.rfind("}") + 1
             if start == -1 or end <= start:
                 return []
-            data = json.loads(raw[start:end])
-            validated = []
+            data = json.loads(text[start:end])
+            result = []
             for fc in data.get("flashcards", []):
-                if self._validate_flashcard(fc):
-                    validated.append({
-                        "question": fc["question"],
-                        "options": fc["options"],
-                        "correct_index": fc["correct_index"],
-                        "explanation": fc.get("explanation", "No explanation provided")
+                if self._valid(fc):
+                    result.append({
+                        "question":      fc["question"],
+                        "options":       fc["options"],
+                        "correct_index": int(fc["correct_index"]),
+                        "explanation":   fc.get("explanation", "No explanation provided."),
                     })
-            return validated
+            return result
         except Exception as e:
-            print(f"Response parsing error: {e}")
+            print(f"Response parse error: {e}")
             return []
 
-    def _validate_flashcard(self, fc: Dict) -> bool:
-        if not isinstance(fc, dict):
-            return False
-        if not all(k in fc for k in ["question", "options", "correct_index"]):
-            return False
-        if not isinstance(fc["options"], list) or len(fc["options"]) != 4:
-            return False
-        if not isinstance(fc["correct_index"], int):
-            return False
-        if not (0 <= fc["correct_index"] < 4):
-            return False
-        return True
+    def _valid(self, fc: Dict) -> bool:
+        return (
+            isinstance(fc, dict)
+            and all(k in fc for k in ("question", "options", "correct_index"))
+            and isinstance(fc["options"], list) and len(fc["options"]) == 4
+            and isinstance(fc["correct_index"], (int, float))
+            and 0 <= int(fc["correct_index"]) < 4
+        )
+
+
+# Backward-compat alias used by the router
+GATEFlashcardGenerator = SkillQuizGenerator
+GATE_SPECIALIZATIONS = SKILL_CATEGORIES

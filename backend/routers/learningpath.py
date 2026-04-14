@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -20,46 +22,66 @@ load_dotenv(os.path.join(_ROOT, "Config", ".env"))
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-from backend.core.key_manager import get_api_key  # noqa: E402
-_llm = ChatGoogleGenerativeAI(
-    model=os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview"),
-    google_api_key=get_api_key(0),
-    temperature=0.4,
-    max_retries=1,   # fail fast so NIM fallback kicks in sooner
-    model_kwargs={"generation_config": {"thinking_config": {"thinking_budget": 0}}},
-)
+from backend.core.key_manager import get_all_keys  # noqa: E402
 _retriever = CourseRetriever()
 
 
-def _invoke_llm(prompt: str) -> str:
-    """Call Gemini; fall back to NIM Llama 3.3 on quota/overload errors."""
-    try:
-        resp = _llm.invoke([HumanMessage(content=prompt)])
-        return resp.content.strip()
-    except Exception as e:
-        msg = str(e)
-        if "429" in msg or "503" in msg or "quota" in msg.lower() or "overload" in msg.lower():
-            logger.warning("Gemini unavailable (%s), falling back to NIM for learning path", msg[:80])
-            nim_key = os.environ.get("NIM_API_KEY", "")
-            nim_base = os.environ.get("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
-            nim_model = os.environ.get("NIM_MODEL", "meta/llama-3.3-70b-instruct")
-            if not nim_key:
-                raise
-            client = _NimSync(base_url=nim_base, api_key=nim_key)
+def _gemini_fallback(prompt: str) -> str:
+    """Try each Gemini key in order; raises if all are exhausted."""
+    keys = get_all_keys()
+    if not keys:
+        raise RuntimeError("No GOOGLE_API_KEY configured")
+    last_exc: Exception = RuntimeError("No keys")
+    for key in keys:
+        try:
+            llm = ChatGoogleGenerativeAI(
+                model=os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview"),
+                google_api_key=key,
+                temperature=0.4,
+                max_retries=0,
+                model_kwargs={"generation_config": {"thinking_config": {"thinking_budget": 0}}},
+            )
+            return llm.invoke([HumanMessage(content=prompt)]).content.strip()
+        except Exception as e:
+            last_exc = e
+            if "429" in str(e):
+                logger.warning("Gemini key exhausted (429), trying next key...")
+                continue
+            raise
+    raise last_exc
+
+
+def _invoke_llm(prompt: str, max_tokens: int = 2048) -> str:
+    """NIM (Llama 3.3) first with generous timeout; Gemini with key rotation as fallback."""
+    nim_key = os.environ.get("NIM_API_KEY", "")
+    if nim_key:
+        try:
+            client = _NimSync(
+                base_url=os.environ.get("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"),
+                api_key=nim_key,
+                timeout=45.0,
+            )
             r = client.chat.completions.create(
-                model=nim_model,
+                model=os.environ.get("NIM_MODEL", "meta/llama-3.3-70b-instruct"),
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.4,
-                max_tokens=2048,
+                max_tokens=max_tokens,
             )
             return r.choices[0].message.content.strip()
-        raise
+        except Exception as e:
+            logger.warning("NIM failed, falling back to Gemini: %s", str(e)[:100])
+    return _gemini_fallback(prompt)
 
 
 class LearningPathRequest(BaseModel):
     current_role: str = Field(..., min_length=2, description="Current job role or skill level")
     target_role: str = Field(..., min_length=2, description="Target role or goal")
     job_description: Optional[str] = Field(None, description="Optional JD to extract required skills from")
+
+
+class OnboardingRequest(BaseModel):
+    new_hire_role: str = Field(..., min_length=2, description="Role being hired for")
+    department: str = Field("", description="Team or department (optional)")
 
 
 @router.post("/generate")
@@ -106,7 +128,7 @@ Rules:
 - Be specific to the actual roles, not generic advice"""
 
     try:
-        text = _invoke_llm(prompt)
+        text = await asyncio.to_thread(_invoke_llm, prompt)
         start = text.find("{")
         end = text.rfind("}") + 1
         plan = json.loads(text[start:end])
@@ -142,3 +164,60 @@ Rules:
         "phases": plan.get("phases", []),
         "recommended_courses": unique_courses[:6],
     }
+
+
+@router.post("/onboarding")
+async def generate_onboarding_plan(
+    body: OnboardingRequest,
+    username: str = Depends(get_current_user),
+):
+    """Generate a 30-60-90 day onboarding plan for a new hire."""
+    dept = f" in {body.department}" if body.department.strip() else ""
+
+    prompt = f"""You are an expert L&D specialist. Create a structured 30-60-90 day onboarding plan
+for a new {body.new_hire_role}{dept}.
+
+Return ONLY valid JSON:
+{{
+  "role": "{body.new_hire_role}",
+  "overview": "2-sentence summary of the onboarding philosophy for this role",
+  "periods": [
+    {{
+      "label": "Days 1-30",
+      "theme": "Orientation & Foundation",
+      "goals": ["goal1", "goal2", "goal3"],
+      "skills_to_learn": ["skill1", "skill2", "skill3"],
+      "key_activities": ["activity1", "activity2", "activity3"],
+      "success_metric": "How to measure success at end of this period"
+    }},
+    {{
+      "label": "Days 31-60",
+      "theme": "Building Proficiency",
+      "goals": [],
+      "skills_to_learn": [],
+      "key_activities": [],
+      "success_metric": ""
+    }},
+    {{
+      "label": "Days 61-90",
+      "theme": "Independence & Impact",
+      "goals": [],
+      "skills_to_learn": [],
+      "key_activities": [],
+      "success_metric": ""
+    }}
+  ],
+  "key_tools": ["tool1", "tool2", "tool3"],
+  "recommended_courses": ["course topic 1", "course topic 2", "course topic 3"]
+}}
+
+Be specific to the {body.new_hire_role} role. Include technical skills, soft skills, and team integration."""
+
+    try:
+        text = await asyncio.to_thread(_invoke_llm, prompt, 2048)
+        start, end = text.find("{"), text.rfind("}") + 1
+        plan = json.loads(text[start:end])
+        return plan
+    except Exception as e:
+        logger.error("Onboarding plan generation failed: %s", e)
+        return {"error": "Could not generate onboarding plan. Please try again."}

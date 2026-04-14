@@ -137,6 +137,7 @@ export const profile = {
   update:      (data) => request('/profile', { method: 'PUT', body: JSON.stringify(data) }),
   streak:      ()     => request('/profile/streak', { method: 'POST' }),
   generateBio: ()     => request('/profile/generate-bio', { method: 'POST' }),
+  readiness:   ()     => request('/profile/readiness',    { method: 'POST' }),
 }
 
 // ── Learning Path ─────────────────────────────────────────────────────────────
@@ -147,6 +148,17 @@ export const learningpath = {
       method: 'POST',
       body: JSON.stringify({ current_role, target_role, job_description }),
     }),
+  onboarding: (new_hire_role, department = '') =>
+    request('/learningpath/onboarding', {
+      method: 'POST',
+      body: JSON.stringify({ new_hire_role, department }),
+    }),
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export const analytics = {
+  dashboard: () => request('/analytics'),
 }
 
 // ── Bookmarks ─────────────────────────────────────────────────────────────────
@@ -174,4 +186,19 @@ export const career = {
   analyze:       (text, mode)         => request('/career/analyze',         { method: 'POST', body: JSON.stringify({ text, mode }) }),
   coverLetter:   (jd_text, notes='') => request('/career/cover-letter',    { method: 'POST', body: JSON.stringify({ jd_text, notes }) }),
   playlistGuide: (urls)               => request('/career/playlist-guide',  { method: 'POST', body: JSON.stringify({ urls }) }),
+
+  parsePdf: async (file) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch(`${BASE}/career/parse-pdf`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('sg_token') || ''}` },
+      body: form,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'PDF parsing failed' }))
+      throw new Error(err.detail || 'PDF parsing failed')
+    }
+    return res.json()
+  },
 }

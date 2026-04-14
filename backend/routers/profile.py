@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import logging
@@ -30,26 +31,26 @@ _llm = ChatGoogleGenerativeAI(
 )
 
 
-def _invoke_llm(prompt: str) -> str:
-    try:
-        return _llm.invoke([HumanMessage(content=prompt)]).content.strip()
-    except Exception as e:
-        msg = str(e)
-        if "429" in msg or "503" in msg or "quota" in msg.lower():
-            nim_key = os.environ.get("NIM_API_KEY", "")
-            if nim_key:
-                client = _NimSync(
-                    base_url=os.environ.get("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"),
-                    api_key=nim_key,
-                )
-                r = client.chat.completions.create(
-                    model=os.environ.get("NIM_MODEL", "meta/llama-3.3-70b-instruct"),
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7,
-                    max_tokens=1024,
-                )
-                return r.choices[0].message.content.strip()
-        raise
+def _invoke_llm(prompt: str, max_tokens: int = 400) -> str:
+    """NIM (Llama 3.3) first; Gemini as fallback. Timeout=8s on NIM so demo stays fast."""
+    nim_key = os.environ.get("NIM_API_KEY", "")
+    if nim_key:
+        try:
+            client = _NimSync(
+                base_url=os.environ.get("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"),
+                api_key=nim_key,
+                timeout=8.0,
+            )
+            r = client.chat.completions.create(
+                model=os.environ.get("NIM_MODEL", "meta/llama-3.3-70b-instruct"),
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=max_tokens,
+            )
+            return r.choices[0].message.content.strip()
+        except Exception as e:
+            logger.warning("NIM failed, falling back to Gemini: %s", str(e)[:100])
+    return _llm.invoke([HumanMessage(content=prompt)]).content.strip()
 
 
 class ProfileUpdate(BaseModel):
@@ -87,6 +88,51 @@ async def update_streak(username: str = Depends(get_current_user)):
     return {"streak": streak}
 
 
+@router.post("/readiness")
+async def get_readiness_score(username: str = Depends(get_current_user)):
+    """Calculate how ready the user is for their target role (0–100)."""
+    profile = get_profile(username)
+    if not profile:
+        return {"error": "Profile not found. Set up your profile first."}
+    target_role = profile.get("target_role", "").strip()
+    if not target_role:
+        return {"error": "Set a target role in your profile to get a readiness score."}
+
+    skills = profile.get("skills", [])
+    current_role = profile.get("current_role", "") or "professional"
+
+    prompt = f"""You are a career coach. Assess how ready this person is for their target role.
+
+Current Role: {current_role}
+Target Role: {target_role}
+Current Skills: {', '.join(skills) if skills else 'None listed'}
+
+Return ONLY valid JSON:
+{{
+  "score": <integer 0-100>,
+  "matched_skills": ["skills they have that are relevant"],
+  "missing_skills": ["top 4-5 skills they still need"],
+  "next_actions": ["3 specific actionable steps to improve readiness"],
+  "summary": "one sentence on where they stand"
+}}"""
+
+    try:
+        text = await asyncio.to_thread(_invoke_llm, prompt)
+        start, end = text.find("{"), text.rfind("}") + 1
+        result = json.loads(text[start:end])
+        return {
+            "score":          int(result.get("score", 0)),
+            "target_role":    target_role,
+            "matched_skills": result.get("matched_skills", []),
+            "missing_skills": result.get("missing_skills", []),
+            "next_actions":   result.get("next_actions", []),
+            "summary":        result.get("summary", ""),
+        }
+    except Exception as e:
+        logger.error("Readiness score failed: %s", e)
+        return {"error": "Could not calculate readiness score. Please try again."}
+
+
 @router.post("/generate-bio")
 async def generate_bio(username: str = Depends(get_current_user)):
     """Generate a LinkedIn bio + headline from the user's profile."""
@@ -112,7 +158,7 @@ Return ONLY valid JSON with no markdown:
 }}"""
 
     try:
-        text = _invoke_llm(prompt)
+        text = await asyncio.to_thread(_invoke_llm, prompt)
         start, end = text.find("{"), text.rfind("}") + 1
         result = json.loads(text[start:end])
         return result

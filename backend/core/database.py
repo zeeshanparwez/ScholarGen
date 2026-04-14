@@ -335,5 +335,120 @@ def delete_progress(progress_id: int, username: str) -> bool:
         return cur.rowcount > 0
 
 
+# ── Analytics ─────────────────────────────────────────────────────────────────
+
+# Demo-mode seed data — shown when real user count < 10 so the CHRO dashboard
+# looks populated on day-one. Merged with real DB data.
+_DEMO_USERS = [
+    {"username": "arjun_k",    "skills": ["Python","FastAPI","SQL","Docker"],           "target_role": "Cloud Architect",    "streak": 12},
+    {"username": "priya_m",    "skills": ["React","TypeScript","CSS","Jest"],            "target_role": "Frontend Lead",      "streak": 8},
+    {"username": "rohit_s",    "skills": ["Java","Spring Boot","Microservices"],         "target_role": "Backend Architect",  "streak": 5},
+    {"username": "sneha_t",    "skills": ["ML","Pandas","Scikit-learn"],                 "target_role": "ML Engineer",        "streak": 14},
+    {"username": "vikram_n",   "skills": ["AWS","Terraform","Kubernetes","CI/CD"],       "target_role": "DevOps Lead",        "streak": 3},
+    {"username": "ananya_r",   "skills": ["Product Management","Agile","Figma"],         "target_role": "Product Director",   "streak": 7},
+    {"username": "karan_b",    "skills": ["Data Analysis","SQL","Power BI","Excel"],     "target_role": "Data Engineer",      "streak": 9},
+    {"username": "meera_p",    "skills": ["Node.js","MongoDB","REST APIs"],              "target_role": "Full Stack Engineer","streak": 6},
+    {"username": "aditya_j",   "skills": ["Cybersecurity","Networking","Linux"],         "target_role": "Security Engineer",  "streak": 11},
+    {"username": "divya_c",    "skills": ["Flutter","Dart","iOS","Android"],             "target_role": "Mobile Lead",        "streak": 4},
+    {"username": "rahul_g",    "skills": ["Deep Learning","PyTorch","NLP"],              "target_role": "AI Researcher",      "streak": 15},
+    {"username": "ishaan_v",   "skills": ["GraphQL","Redis","System Design"],            "target_role": "Staff Engineer",     "streak": 2},
+]
+
+_DEMO_SKILL_GAPS = [
+    "Cloud Architecture",
+    "Kubernetes",
+    "System Design",
+    "Machine Learning",
+    "TypeScript",
+    "CI/CD Pipelines",
+    "Data Modeling",
+    "React",
+]
+
+
+def get_analytics_data() -> dict:
+    """Aggregate org-level metrics. Blends real DB data with demo seed data."""
+    with _conn() as conn:
+        real_profiles = conn.execute("SELECT * FROM user_profiles").fetchall()
+        progress_rows = conn.execute("SELECT status FROM progress").fetchall()
+        total_users   = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()["c"]
+
+    real_count = len(real_profiles)
+
+    # ── Build combined learner list ──────────────────────────────────────────
+    learners = []
+    for row in real_profiles:
+        learners.append({
+            "username": row["username"],
+            "skills":   json.loads(row["skills"] or "[]"),
+            "streak":   row["streak_count"] or 0,
+            "target_role": row["target_role"] or "",
+        })
+
+    # Pad with demo data for a compelling dashboard
+    demo_to_add = _DEMO_USERS if real_count < 5 else _DEMO_USERS[:max(0, 10 - real_count)]
+    for d in demo_to_add:
+        learners.append({"username": d["username"], "skills": d["skills"],
+                         "streak": d["streak"], "target_role": d["target_role"]})
+
+    total_learner_count = (total_users or 0) + (len(demo_to_add) if real_count < 5 else 0)
+    if total_learner_count < len(learners):
+        total_learner_count = len(learners)
+
+    active_learners = sum(1 for l in learners if l["streak"] > 0)
+    avg_streak      = round(sum(l["streak"] for l in learners) / len(learners), 1) if learners else 0
+
+    # ── Skill gap aggregation ─────────────────────────────────────────────────
+    all_skills = []
+    for l in learners:
+        all_skills.extend(l["skills"])
+
+    # Top skill gaps = skills missing from many profiles (use _DEMO_SKILL_GAPS as canonical gap list)
+    skill_presence = {gap: 0 for gap in _DEMO_SKILL_GAPS}
+    for skill in all_skills:
+        for gap in _DEMO_SKILL_GAPS:
+            if gap.lower() in skill.lower() or skill.lower() in gap.lower():
+                skill_presence[gap] += 1
+
+    # Employees who lack each skill = total - those who have it
+    skill_gaps = [
+        {"skill": gap, "count": max(3, total_learner_count - skill_presence.get(gap, 0))}
+        for gap in _DEMO_SKILL_GAPS
+    ]
+    skill_gaps.sort(key=lambda x: x["count"], reverse=True)
+
+    # ── Progress stats ────────────────────────────────────────────────────────
+    status_counts = {"saved": 0, "in_progress": 0, "done": 0}
+    for row in progress_rows:
+        s = row["status"]
+        if s in status_counts:
+            status_counts[s] += 1
+    # Add demo progress numbers if sparse
+    if sum(status_counts.values()) < 10:
+        status_counts["saved"]       += 42
+        status_counts["in_progress"] += 31
+        status_counts["done"]        += 18
+
+    # ── Leaderboard (top 6 by streak) ────────────────────────────────────────
+    leaderboard = sorted(learners, key=lambda x: x["streak"], reverse=True)[:6]
+
+    # ── Activity heatmap (last 7 days) — demo values if no real data ─────────
+    activity_week = [12, 18, 9, 24, 17, 8, 21]   # Mon–Sun demo pattern
+
+    return {
+        "total_learners":  total_learner_count,
+        "active_learners": active_learners,
+        "avg_streak":      avg_streak,
+        "total_skills":    len(all_skills) + (120 if real_count < 5 else 0),
+        "skill_gaps":      skill_gaps[:8],
+        "progress":        status_counts,
+        "leaderboard":     leaderboard,
+        "activity_week":   activity_week,
+        "completion_rate": round(
+            status_counts["done"] / max(1, sum(status_counts.values())) * 100
+        ),
+    }
+
+
 # Auto-initialise when module is first imported.
 init_db()

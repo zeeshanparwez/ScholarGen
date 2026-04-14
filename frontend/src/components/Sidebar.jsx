@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Zap, MessageSquare, BookOpen, FileText, Users, LogOut, ChevronRight, Search, Globe, Youtube, Database, BookMarked, Map, User, Briefcase, Bookmark, CheckSquare, Moon, Sun, Flame } from 'lucide-react'
+import { Zap, MessageSquare, BookOpen, FileText, Users, LogOut, ChevronRight, Search, Globe, Youtube, Database, BookMarked, Map, User, Briefcase, Bookmark, CheckSquare, Moon, Sun, Flame, BarChart2 } from 'lucide-react'
 import clsx from 'clsx'
 
 const TOOL_META = {
@@ -13,6 +13,7 @@ const TOOL_META = {
 
 const NAV = [
   { id: 'chat',         label: 'AI Assistant',      icon: MessageSquare },
+  { id: 'analytics',    label: 'Org Analytics',      icon: BarChart2     },
   { id: 'learningpath', label: 'Learning Path',      icon: Map           },
   { id: 'career',       label: 'Career Tools',       icon: Briefcase     },
   { id: 'courses',      label: 'Course Library',     icon: BookOpen      },
