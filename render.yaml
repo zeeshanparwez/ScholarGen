@@ -2,20 +2,38 @@ services:
   - type: web
     name: upskillOS
     runtime: python
-    buildCommand: pip install -r requirements.txt && cd frontend && npm install && npm run build
+    buildCommand: pip install -r requirements.txt uv && cd frontend && npm install && npm run build
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     envVars:
+
+      # ── Google / Gemini ──────────────────────────────────────────────────────
       - key: GOOGLE_API_KEY
-        sync: false          # set manually in Render dashboard — never commit the key
-      - key: JWT_SECRET_KEY
-        sync: false
+        sync: false                  # paste in Render dashboard
+      - key: GOOGLE_API_KEY_2
+        sync: false                  # backup key for Gemini key rotation
       - key: GEMINI_MODEL
         value: gemini-3.1-flash-lite-preview
+
+      # ── Auth ─────────────────────────────────────────────────────────────────
+      - key: JWT_SECRET_KEY
+        sync: false                  # paste in Render dashboard
+
+      # ── Groq ─────────────────────────────────────────────────────────────────
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+
+      # ── NVIDIA NIM ───────────────────────────────────────────────────────────
+      - key: NIM_API_KEY
+        sync: false
+      - key: NIM_MODEL
+        value: meta/llama-3.3-70b-instruct
+      - key: NIM_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
+
+      # ── App config ───────────────────────────────────────────────────────────
       - key: COURSE_DATA_PATH
         value: /opt/render/project/src/Data/nptel_courses_with_embeddings.xlsx
-      - key: NIM_API_KEY
-        sync: false          # optional — for Llama 3.3 / Llama 4 models
-      - key: GROQ_API_KEY
-        sync: false          # optional — for Groq model
       - key: PYTHONUNBUFFERED
         value: "1"
