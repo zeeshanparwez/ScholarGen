@@ -63,7 +63,7 @@ mypy_extensions==1.1.0
 numpy==2.3.2
 openpyxl==3.1.5
 orjson==3.11.3
-ormsgpack==1.10.0
+# ormsgpack — transitive dep of mcp, let pip resolve a pre-built wheel
 outcome==1.3.0.post0
 packaging==25.0
 pandas==2.3.2
