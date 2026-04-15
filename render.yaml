@@ -1,26 +1,22 @@
 services:
   - type: web
     name: upskillOS
-    runtime: python
-    buildCommand: pip install -r requirements.txt uv && cd frontend && npm install && npm run build
-    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     envVars:
-
-      # ── Python version (overrides Render default of 3.14) ────────────────────
-      - key: PYTHON_VERSION
-        value: "3.11.9"
 
       # ── Google / Gemini ──────────────────────────────────────────────────────
       - key: GOOGLE_API_KEY
         sync: false                  # paste in Render dashboard
       - key: GOOGLE_API_KEY_2
-        sync: false                  # backup key for Gemini key rotation
+        sync: false
       - key: GEMINI_MODEL
         value: gemini-3.1-flash-lite-preview
 
       # ── Auth ─────────────────────────────────────────────────────────────────
       - key: JWT_SECRET_KEY
-        sync: false                  # paste in Render dashboard
+        sync: false
 
       # ── Groq ─────────────────────────────────────────────────────────────────
       - key: GROQ_API_KEY
@@ -38,6 +34,6 @@ services:
 
       # ── App config ───────────────────────────────────────────────────────────
       - key: COURSE_DATA_PATH
-        value: /opt/render/project/src/Data/nptel_courses_with_embeddings.xlsx
+        value: /app/Data/nptel_courses_with_embeddings.xlsx
       - key: PYTHONUNBUFFERED
         value: "1"
