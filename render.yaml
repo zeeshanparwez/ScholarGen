@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: upskillOS
+    runtime: python
+    buildCommand: pip install -r requirements.txt && cd frontend && npm install && npm run build
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GOOGLE_API_KEY
+        sync: false          # set manually in Render dashboard — never commit the key
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.1-flash-lite-preview
+      - key: COURSE_DATA_PATH
+        value: /opt/render/project/src/Data/nptel_courses_with_embeddings.xlsx
+      - key: NIM_API_KEY
+        sync: false          # optional — for Llama 3.3 / Llama 4 models
+      - key: GROQ_API_KEY
+        sync: false          # optional — for Groq model
+      - key: PYTHONUNBUFFERED
+        value: "1"

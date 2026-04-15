@@ -48,10 +48,12 @@ Here's what I can do for you:
 Try asking: *"I'm a backend developer, what do I need to learn to become an ML engineer?"*`
 
 const EXAMPLE_QUERIES = [
-  'What skills do I need to become a cloud architect?',
-  'Find learning resources for product management',
-  'What are the latest trends in generative AI?',
-  'Explain microservices architecture with examples',
+  "I'm a backend developer moving to ML — what's my 12-week learning plan?",
+  "What skills separate a senior engineer from a staff engineer?",
+  "Find me courses on Kubernetes and cloud-native architecture",
+  "What are the latest research trends in large language models?",
+  "How do I transition from data analyst to data engineer?",
+  "What should a product manager learn about AI to stay relevant?",
 ]
 
 export default function ChatPage() {
@@ -287,12 +289,13 @@ export default function ChatPage() {
             {/* Example queries — shown only with just the welcome message */}
             {messages.length === 1 && (
               <div className="max-w-3xl mx-auto w-full px-4 pb-2">
-                <div className="grid grid-cols-2 gap-2">
+                <p className="text-[11px] text-gray-400 mb-2 text-center">Try asking</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {EXAMPLE_QUERIES.map(q => (
                     <button
                       key={q}
                       onClick={() => handleExample(q)}
-                      className="text-left text-xs text-gray-600 bg-gray-50 hover:bg-accent-50 hover:text-accent-700 border border-gray-100 hover:border-accent-200 px-3 py-2 rounded-xl transition-all"
+                      className="text-left text-xs text-gray-600 bg-gray-50 hover:bg-accent-50 hover:text-accent-700 border border-gray-100 hover:border-accent-200 px-3 py-2.5 rounded-xl transition-all leading-snug"
                     >
                       {q}
                     </button>

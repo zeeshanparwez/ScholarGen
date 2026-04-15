@@ -120,45 +120,74 @@ def _compute_embeddings(profiles: list) -> np.ndarray:
 
 # ── Collaboration logic ───────────────────────────────────────────────────────
 
-def match_similar_users(username: str, top_n: int = 3) -> list:
-    """Return usernames of the top_n most similar users based on profile embeddings."""
+def _jaccard(set_a: set, set_b: set) -> float:
+    a = {s.lower() for s in set_a}
+    b = {s.lower() for s in set_b}
+    if not a and not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def match_similar_users(username: str, top_n: int = 5) -> list:
+    """
+    Return the top_n most similar users as enriched dicts.
+    Uses Jaccard similarity on skills (60%) + interests (40%).
+    No external API calls — always works.
+    """
     profiles = get_all_profiles()
-    if not any(p["username"] == username for p in profiles):
+    user_profile = next((p for p in profiles if p["username"] == username), None)
+    if not user_profile:
         return []
 
-    embeddings = _compute_embeddings(profiles)
-    user_idx = next(i for i, p in enumerate(profiles) if p["username"] == username)
-    sims = cosine_similarity([embeddings[user_idx]], embeddings)[0]
+    user_skills    = set(user_profile.get("skills", []))
+    user_interests = set(user_profile.get("interests", []))
 
-    ranked = sorted(
-        [(i, s) for i, s in enumerate(sims) if i != user_idx],
-        key=lambda x: x[1],
-        reverse=True,
-    )
-    return [profiles[i]["username"] for i, _ in ranked[:top_n]]
+    scored = []
+    for p in profiles:
+        if p["username"] == username:
+            continue
+        p_skills    = set(p.get("skills", []))
+        p_interests = set(p.get("interests", []))
+
+        skill_sim    = _jaccard(user_skills, p_skills)
+        interest_sim = _jaccard(user_interests, p_interests)
+        score        = 0.6 * skill_sim + 0.4 * interest_sim
+
+        # Shared skills preserving original casing from the match's profile
+        shared = [s for s in p_skills if any(s.lower() == u.lower() for u in user_skills)]
+
+        scored.append({
+            "username":     p["username"],
+            "current_role": p.get("current_role", ""),
+            "target_role":  p.get("target_role", ""),
+            "shared_skills": shared[:5],
+            "score":         round(score * 100),   # 0-100 percent
+        })
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    return scored[:top_n]
 
 
-def suggest_collaboration_topics(usernames: list) -> list:
-    """Return simple collaboration topics aggregated from matched users' profiles."""
-    all_profiles = get_all_profiles()
-    profile_map = {p["username"]: p for p in all_profiles}
+def suggest_collaboration_topics(matches: list) -> list:
+    """Generate collaboration topic suggestions from matched user profiles."""
+    all_shared: list = []
+    for m in matches:
+        all_shared.extend(m.get("shared_skills", []))
 
-    all_interests: set = set()
-    all_skills: set = set()
-
-    for username in usernames:
-        p = profile_map.get(username)
-        if p:
-            all_interests.update(p["interests"])
-            all_skills.update(p["skills"])
+    # Deduplicate preserving order
+    seen: set = set()
+    unique_shared = [s for s in all_shared if not (s.lower() in seen or seen.add(s.lower()))]
 
     topics = []
-    if all_interests:
-        topics.append(f"Interests: {', '.join(list(all_interests)[:3])}")
-    if all_skills:
-        topics.append(f"Skills: {', '.join(list(all_skills)[:3])}")
-    if usernames:
-        topics.append(f"Study group: {', '.join(usernames)}")
+    if unique_shared:
+        topics.append(f"Deep-dive on shared skills: {', '.join(unique_shared[:4])}")
+    roles = [m["target_role"] for m in matches if m.get("target_role")]
+    if roles:
+        unique_roles = list(dict.fromkeys(roles))[:3]
+        topics.append(f"Career paths to explore together: {', '.join(unique_roles)}")
+    if len(matches) >= 2:
+        names = [m["username"] for m in matches[:3]]
+        topics.append(f"Start a study group with {', '.join(names)}")
     return topics
 
 

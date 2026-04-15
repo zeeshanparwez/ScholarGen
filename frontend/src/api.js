@@ -158,7 +158,10 @@ export const learningpath = {
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
 export const analytics = {
-  dashboard: () => request('/analytics'),
+  dashboard:   () => request('/analytics'),
+  skillMatrix: () => request('/analytics/skill-matrix'),
+  brief:       () => request('/analytics/brief', { method: 'POST' }),
+  gapPlan:     (skill) => request('/analytics/gap-plan', { method: 'POST', body: JSON.stringify({ skill }) }),
 }
 
 // ── Bookmarks ─────────────────────────────────────────────────────────────────

@@ -340,18 +340,16 @@ def delete_progress(progress_id: int, username: str) -> bool:
 # Demo-mode seed data — shown when real user count < 10 so the CHRO dashboard
 # looks populated on day-one. Merged with real DB data.
 _DEMO_USERS = [
-    {"username": "arjun_k",    "skills": ["Python","FastAPI","SQL","Docker"],           "target_role": "Cloud Architect",    "streak": 12},
-    {"username": "priya_m",    "skills": ["React","TypeScript","CSS","Jest"],            "target_role": "Frontend Lead",      "streak": 8},
-    {"username": "rohit_s",    "skills": ["Java","Spring Boot","Microservices"],         "target_role": "Backend Architect",  "streak": 5},
-    {"username": "sneha_t",    "skills": ["ML","Pandas","Scikit-learn"],                 "target_role": "ML Engineer",        "streak": 14},
-    {"username": "vikram_n",   "skills": ["AWS","Terraform","Kubernetes","CI/CD"],       "target_role": "DevOps Lead",        "streak": 3},
-    {"username": "ananya_r",   "skills": ["Product Management","Agile","Figma"],         "target_role": "Product Director",   "streak": 7},
-    {"username": "karan_b",    "skills": ["Data Analysis","SQL","Power BI","Excel"],     "target_role": "Data Engineer",      "streak": 9},
-    {"username": "meera_p",    "skills": ["Node.js","MongoDB","REST APIs"],              "target_role": "Full Stack Engineer","streak": 6},
-    {"username": "aditya_j",   "skills": ["Cybersecurity","Networking","Linux"],         "target_role": "Security Engineer",  "streak": 11},
-    {"username": "divya_c",    "skills": ["Flutter","Dart","iOS","Android"],             "target_role": "Mobile Lead",        "streak": 4},
-    {"username": "rahul_g",    "skills": ["Deep Learning","PyTorch","NLP"],              "target_role": "AI Researcher",      "streak": 15},
-    {"username": "ishaan_v",   "skills": ["GraphQL","Redis","System Design"],            "target_role": "Staff Engineer",     "streak": 2},
+    {"username": "arjun_kumar",  "current_role": "Backend Engineer",      "skills": ["Python","FastAPI","SQL","Docker"],           "target_role": "Cloud Architect",    "streak": 12, "days_ago": 0},
+    {"username": "priya_mehta",  "current_role": "Frontend Developer",    "skills": ["React","TypeScript","CSS","Jest"],            "target_role": "Frontend Lead",      "streak": 8,  "days_ago": 0},
+    {"username": "rohit_sharma", "current_role": "Senior Java Developer", "skills": ["Java","Spring Boot","Microservices"],         "target_role": "Backend Architect",  "streak": 5,  "days_ago": 1},
+    {"username": "sneha_tiwari", "current_role": "Data Analyst",          "skills": ["Python","Pandas","Scikit-learn"],             "target_role": "ML Engineer",        "streak": 14, "days_ago": 0},
+    {"username": "vikram_nair",  "current_role": "DevOps Engineer",       "skills": ["AWS","Terraform","Kubernetes","CI/CD"],       "target_role": "DevOps Lead",        "streak": 3,  "days_ago": 2},
+    {"username": "ananya_reddy", "current_role": "Product Manager",       "skills": ["Product Management","Agile","Figma"],         "target_role": "Product Director",   "streak": 7,  "days_ago": 0},
+    {"username": "karan_bhatia", "current_role": "Data Analyst",          "skills": ["SQL","Power BI","Excel","Python"],            "target_role": "Data Engineer",      "streak": 9,  "days_ago": 1},
+    {"username": "meera_pillai", "current_role": "Full Stack Developer",  "skills": ["Node.js","MongoDB","React","REST APIs"],      "target_role": "Engineering Manager","streak": 6,  "days_ago": 0},
+    {"username": "rahul_gupta",  "current_role": "ML Engineer",           "skills": ["Deep Learning","PyTorch","NLP","LLMs"],       "target_role": "AI Researcher",      "streak": 15, "days_ago": 0},
+    {"username": "ishaan_verma", "current_role": "Software Engineer",     "skills": ["GraphQL","Redis","System Design"],            "target_role": "Staff Engineer",     "streak": 11, "days_ago": 1},
 ]
 
 _DEMO_SKILL_GAPS = [
@@ -368,28 +366,40 @@ _DEMO_SKILL_GAPS = [
 
 def get_analytics_data() -> dict:
     """Aggregate org-level metrics. Blends real DB data with demo seed data."""
+    from datetime import date, timedelta
+
     with _conn() as conn:
         real_profiles = conn.execute("SELECT * FROM user_profiles").fetchall()
         progress_rows = conn.execute("SELECT status FROM progress").fetchall()
         total_users   = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()["c"]
 
     real_count = len(real_profiles)
+    today = date.today()
 
     # ── Build combined learner list ──────────────────────────────────────────
     learners = []
     for row in real_profiles:
         learners.append({
-            "username": row["username"],
-            "skills":   json.loads(row["skills"] or "[]"),
-            "streak":   row["streak_count"] or 0,
+            "username":    row["username"],
+            "skills":      json.loads(row["skills"] or "[]"),
+            "streak":      row["streak_count"] or 0,
             "target_role": row["target_role"] or "",
+            "current_role": row["current_role"] or "",
+            "last_active": row["last_active"] or "",
         })
 
     # Pad with demo data for a compelling dashboard
     demo_to_add = _DEMO_USERS if real_count < 5 else _DEMO_USERS[:max(0, 10 - real_count)]
     for d in demo_to_add:
-        learners.append({"username": d["username"], "skills": d["skills"],
-                         "streak": d["streak"], "target_role": d["target_role"]})
+        last_active_date = today - timedelta(days=d.get("days_ago", 0))
+        learners.append({
+            "username":    d["username"],
+            "skills":      d["skills"],
+            "streak":      d["streak"],
+            "target_role": d["target_role"],
+            "current_role": d.get("current_role", ""),
+            "last_active": last_active_date.isoformat(),
+        })
 
     total_learner_count = (total_users or 0) + (len(demo_to_add) if real_count < 5 else 0)
     if total_learner_count < len(learners):
@@ -432,8 +442,23 @@ def get_analytics_data() -> dict:
     # ── Leaderboard (top 6 by streak) ────────────────────────────────────────
     leaderboard = sorted(learners, key=lambda x: x["streak"], reverse=True)[:6]
 
-    # ── Activity heatmap (last 7 days) — demo values if no real data ─────────
-    activity_week = [12, 18, 9, 24, 17, 8, 21]   # Mon–Sun demo pattern
+    # ── Activity heatmap (last 7 days) — calculated from last_active + streak ─
+    week_window = [(today - timedelta(days=i)) for i in range(6, -1, -1)]
+    activity_counts = {d: 0 for d in week_window}
+    for l in learners:
+        last_active_str = l.get("last_active", "")
+        streak = l.get("streak", 0)
+        if not last_active_str or not streak:
+            continue
+        try:
+            last_active_date = date.fromisoformat(last_active_str)
+        except ValueError:
+            continue
+        for offset in range(min(streak, 7)):
+            active_day = last_active_date - timedelta(days=offset)
+            if active_day in activity_counts:
+                activity_counts[active_day] += 1
+    activity_week = [activity_counts[d] for d in week_window]
 
     return {
         "total_learners":  total_learner_count,
