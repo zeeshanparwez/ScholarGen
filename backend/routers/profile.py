@@ -32,7 +32,14 @@ _llm = ChatGoogleGenerativeAI(
 
 
 def _invoke_llm(prompt: str, max_tokens: int = 400) -> str:
-    """NIM (Llama 3.3) first; Gemini as fallback. Timeout=8s on NIM so demo stays fast."""
+    """Azure OpenAI (primary) → NIM (secondary) → Gemini fallback. Timeout=8s on NIM so demo stays fast."""
+    from backend.core.azure_llm import invoke_azure, is_azure_configured
+    if is_azure_configured():
+        try:
+            return invoke_azure(prompt, max_tokens=max_tokens)
+        except Exception as e:
+            logger.warning("Azure OpenAI failed, falling back to NIM: %s", str(e)[:120])
+
     nim_key = os.environ.get("NIM_API_KEY", "")
     if nim_key:
         try:

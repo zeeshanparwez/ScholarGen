@@ -36,7 +36,7 @@ llm = ChatGoogleGenerativeAI(
 # ── Profile extraction ────────────────────────────────────────────────────────
 
 def extract_profile_from_text(text: str) -> dict:
-    """Use Gemini to extract {interests, skills} as lists from conversation text."""
+    """Use the primary LLM (Azure → Gemini) to extract {interests, skills} from conversation text."""
     prompt = (
         "Extract user's interests and skills from the following text. "
         "Return ONLY a valid JSON dictionary with keys 'interests' and 'skills'.\n\n"
@@ -45,8 +45,12 @@ def extract_profile_from_text(text: str) -> dict:
         '{"interests": ["AI", "Machine Learning"], "skills": ["Python", "Data Analysis"]}'
     )
     try:
-        response = llm.invoke([HumanMessage(content=prompt)])
-        text_out = response.content.strip()
+        from backend.core.azure_llm import invoke_azure, is_azure_configured
+        if is_azure_configured():
+            text_out = invoke_azure(prompt, temperature=0.3, max_tokens=300)
+        else:
+            response = llm.invoke([HumanMessage(content=prompt)])
+            text_out = response.content.strip()
         start = text_out.find("{")
         end = text_out.rfind("}") + 1
         json_str = text_out[start:end] if start != -1 and end != 0 else text_out

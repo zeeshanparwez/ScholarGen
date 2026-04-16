@@ -337,95 +337,48 @@ def delete_progress(progress_id: int, username: str) -> bool:
 
 # ── Analytics ─────────────────────────────────────────────────────────────────
 
-# Demo-mode seed data — shown when real user count < 10 so the CHRO dashboard
-# looks populated on day-one. Merged with real DB data.
-_DEMO_USERS = [
-    {"username": "arjun_kumar",  "current_role": "Backend Engineer",      "skills": ["Python","FastAPI","SQL","Docker"],           "target_role": "Cloud Architect",    "streak": 12, "days_ago": 0},
-    {"username": "priya_mehta",  "current_role": "Frontend Developer",    "skills": ["React","TypeScript","CSS","Jest"],            "target_role": "Frontend Lead",      "streak": 8,  "days_ago": 0},
-    {"username": "rohit_sharma", "current_role": "Senior Java Developer", "skills": ["Java","Spring Boot","Microservices"],         "target_role": "Backend Architect",  "streak": 5,  "days_ago": 1},
-    {"username": "sneha_tiwari", "current_role": "Data Analyst",          "skills": ["Python","Pandas","Scikit-learn"],             "target_role": "ML Engineer",        "streak": 14, "days_ago": 0},
-    {"username": "vikram_nair",  "current_role": "DevOps Engineer",       "skills": ["AWS","Terraform","Kubernetes","CI/CD"],       "target_role": "DevOps Lead",        "streak": 3,  "days_ago": 2},
-    {"username": "ananya_reddy", "current_role": "Product Manager",       "skills": ["Product Management","Agile","Figma"],         "target_role": "Product Director",   "streak": 7,  "days_ago": 0},
-    {"username": "karan_bhatia", "current_role": "Data Analyst",          "skills": ["SQL","Power BI","Excel","Python"],            "target_role": "Data Engineer",      "streak": 9,  "days_ago": 1},
-    {"username": "meera_pillai", "current_role": "Full Stack Developer",  "skills": ["Node.js","MongoDB","React","REST APIs"],      "target_role": "Engineering Manager","streak": 6,  "days_ago": 0},
-    {"username": "rahul_gupta",  "current_role": "ML Engineer",           "skills": ["Deep Learning","PyTorch","NLP","LLMs"],       "target_role": "AI Researcher",      "streak": 15, "days_ago": 0},
-    {"username": "ishaan_verma", "current_role": "Software Engineer",     "skills": ["GraphQL","Redis","System Design"],            "target_role": "Staff Engineer",     "streak": 11, "days_ago": 1},
-]
-
-_DEMO_SKILL_GAPS = [
-    "Cloud Architecture",
-    "Kubernetes",
-    "System Design",
-    "Machine Learning",
-    "TypeScript",
-    "CI/CD Pipelines",
-    "Data Modeling",
-    "React",
-]
-
-
 def get_analytics_data() -> dict:
-    """Aggregate org-level metrics. Blends real DB data with demo seed data."""
+    """Aggregate actual org-level metrics."""
     from datetime import date, timedelta
 
     with _conn() as conn:
         real_profiles = conn.execute("SELECT * FROM user_profiles").fetchall()
         progress_rows = conn.execute("SELECT status FROM progress").fetchall()
-        total_users   = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()["c"]
 
-    real_count = len(real_profiles)
     today = date.today()
 
-    # ── Build combined learner list ──────────────────────────────────────────
     learners = []
+    all_skills = []
+    
     for row in real_profiles:
+        skills = json.loads(row["skills"] or "[]")
+        all_skills.extend(skills)
         learners.append({
             "username":    row["username"],
-            "skills":      json.loads(row["skills"] or "[]"),
+            "skills":      skills,
             "streak":      row["streak_count"] or 0,
             "target_role": row["target_role"] or "",
             "current_role": row["current_role"] or "",
             "last_active": row["last_active"] or "",
         })
 
-    # Pad with demo data for a compelling dashboard
-    demo_to_add = _DEMO_USERS if real_count < 5 else _DEMO_USERS[:max(0, 10 - real_count)]
-    for d in demo_to_add:
-        last_active_date = today - timedelta(days=d.get("days_ago", 0))
-        learners.append({
-            "username":    d["username"],
-            "skills":      d["skills"],
-            "streak":      d["streak"],
-            "target_role": d["target_role"],
-            "current_role": d.get("current_role", ""),
-            "last_active": last_active_date.isoformat(),
-        })
-
-    total_learner_count = (total_users or 0) + (len(demo_to_add) if real_count < 5 else 0)
-    if total_learner_count < len(learners):
-        total_learner_count = len(learners)
-
     active_learners = sum(1 for l in learners if l["streak"] > 0)
     avg_streak      = round(sum(l["streak"] for l in learners) / len(learners), 1) if learners else 0
 
     # ── Skill gap aggregation ─────────────────────────────────────────────────
-    all_skills = []
-    for l in learners:
-        all_skills.extend(l["skills"])
-
-    # Top skill gaps = skills missing from many profiles (use _DEMO_SKILL_GAPS as canonical gap list)
-    skill_presence = {gap: 0 for gap in _DEMO_SKILL_GAPS}
+    # Since we don't have hardcoded demo skill gaps, we can figure out what skills are present
+    # Or rely on an external skill taxonomy. For now, we will return top skills present as placeholders for gaps,
+    # or identify which users are missing standard skills. Let's return frequency of existing skills as "strengths".
+    # For actual gaps, we'd need to compare against target role requirements.
+    # To keep the dashboard working, we return a basic structure.
+    skill_counts = {}
     for skill in all_skills:
-        for gap in _DEMO_SKILL_GAPS:
-            if gap.lower() in skill.lower() or skill.lower() in gap.lower():
-                skill_presence[gap] += 1
-
-    # Employees who lack each skill = total - those who have it
-    skill_gaps = [
-        {"skill": gap, "count": max(3, total_learner_count - skill_presence.get(gap, 0))}
-        for gap in _DEMO_SKILL_GAPS
-    ]
-    skill_gaps.sort(key=lambda x: x["count"], reverse=True)
+        skill_counts[skill] = skill_counts.get(skill, 0) + 1
+        
+    # Example gaps calculation based on least common skills
+    # (In a real system, you'd compare against target roles)
+    sorted_skills = sorted(skill_counts.items(), key=lambda x: x[1])
+    skill_gaps = [{"skill": s, "count": len(learners) - c} for s, c in sorted_skills[:8]]
 
     # ── Progress stats ────────────────────────────────────────────────────────
     status_counts = {"saved": 0, "in_progress": 0, "done": 0}
@@ -433,16 +386,11 @@ def get_analytics_data() -> dict:
         s = row["status"]
         if s in status_counts:
             status_counts[s] += 1
-    # Add demo progress numbers if sparse
-    if sum(status_counts.values()) < 10:
-        status_counts["saved"]       += 42
-        status_counts["in_progress"] += 31
-        status_counts["done"]        += 18
 
     # ── Leaderboard (top 6 by streak) ────────────────────────────────────────
     leaderboard = sorted(learners, key=lambda x: x["streak"], reverse=True)[:6]
 
-    # ── Activity heatmap (last 7 days) — calculated from last_active + streak ─
+    # ── Activity heatmap (last 7 days) ────────────────────────────────────────
     week_window = [(today - timedelta(days=i)) for i in range(6, -1, -1)]
     activity_counts = {d: 0 for d in week_window}
     for l in learners:
@@ -461,11 +409,11 @@ def get_analytics_data() -> dict:
     activity_week = [activity_counts[d] for d in week_window]
 
     return {
-        "total_learners":  total_learner_count,
+        "total_learners":  len(learners),
         "active_learners": active_learners,
         "avg_streak":      avg_streak,
-        "total_skills":    len(all_skills) + (120 if real_count < 5 else 0),
-        "skill_gaps":      skill_gaps[:8],
+        "total_skills":    len(all_skills),
+        "skill_gaps":      skill_gaps,
         "progress":        status_counts,
         "leaderboard":     leaderboard,
         "activity_week":   activity_week,

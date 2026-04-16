@@ -146,7 +146,19 @@ class SkillQuizGenerator:
     ) -> List[Dict]:
         prompt = self._build_prompt(skill_area, sub_area, topic, num_questions)
 
-        # Try NIM first
+        # Try Azure OpenAI first (primary)
+        from backend.core.azure_llm import invoke_azure, is_azure_configured
+        if is_azure_configured():
+            try:
+                raw = invoke_azure(prompt, temperature=0.4, max_tokens=2048)
+                cards = self._parse_response(raw)
+                if cards:
+                    return cards
+                print("Azure returned no parseable cards, falling back to NIM")
+            except Exception as e:
+                print(f"Azure failed ({e}), falling back to NIM")
+
+        # Try NIM second
         try:
             raw = self._call_nim(prompt)
             cards = self._parse_response(raw)
@@ -156,7 +168,7 @@ class SkillQuizGenerator:
         except Exception as e:
             print(f"NIM failed ({e}), falling back to Gemini")
 
-        # Gemini fallback
+        # Gemini last resort
         try:
             raw = self._call_gemini(prompt)
             cards = self._parse_response(raw)

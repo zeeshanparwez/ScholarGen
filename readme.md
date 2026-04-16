@@ -1,226 +1,159 @@
-# ScholarGen — AI-Powered Student Learning Assistant
+<div align="center">
+  <img src="https://img.shields.io/badge/Python-3.11%2B-blue.svg" alt="Python 3.11+" />
+  <img src="https://img.shields.io/badge/FastAPI-0.115-009688.svg" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/React-18-61DAFB.svg" alt="React 18" />
+  <img src="https://img.shields.io/badge/LangGraph-0.6.7-green.svg" alt="LangGraph" />
+  <img src="https://img.shields.io/badge/Azure_OpenAI-GPT_4o_Mini-008AD7.svg" alt="Azure OpenAI" />
+</div>
 
-[![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com)
-[![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev)
-[![LangGraph](https://img.shields.io/badge/LangGraph-0.6.7-green.svg)](https://langchain-ai.github.io/langgraph/)
-[![Gemini](https://img.shields.io/badge/Gemini-3.1%20Flash%20Lite-4285F4.svg)](https://ai.google.dev)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<br/>
 
-**ScholarGen (EduAssist)** is an AI-powered educational assistant that helps students find courses, discover research papers, generate flashcards, and collaborate with peers — all through a streaming chat interface powered by Google Gemini and LangGraph.
+<div align="center">
+  <h1>UpskillOS</h1>
+  <p><strong>AI-Powered Continuous Learning & Talent Intelligence Platform</strong></p>
+  <img src="images/landing_page.png" alt="UpskillOS Landing Page" width="800" style="border-radius: 8px; border: 1px solid #333;" />
+</div>
 
-## Features
+<br/>
 
-- **Streaming Chat** — token-by-token SSE streaming with real-time tool-use indicators
-- **NPTEL Course Search** — semantic search across 3,200+ NPTEL courses using ChromaDB
-- **Research Paper Discovery** — arXiv search, full paper extraction, and in-session semantic cache
-- **YouTube Transcript** — extract and summarize transcripts from educational videos
-- **Web Fetch** — retrieve and analyze any webpage or article
-- **GATE Flashcards** — AI-generated MCQ flashcards for GATE exam preparation
-- **Study Partner Matching** — match with similar users based on interests and skills
-- **Per-User Memory** — isolated conversation history per account via LangGraph thread IDs
-- **JWT Authentication** — secure login/signup with bcrypt password hashing
+**UpskillOS** (formerly ScholarGen) is an enterprise-grade capability-building platform. Designed originally as a personal knowledge system for AI engineers, it naturally scales into an **Organisational Intelligence System** for CHROs and Talent Development leaders, particularly in fast-paced Fintech and AI-first organizations.
 
-## Architecture
+It moves beyond passive learning management (LMS) by using live LLMs to dynamically extract behavioural skills, construct customized learning paths, and give leadership real-time visibility into the organization's capabilities via a highly dense Skill Matrix.
 
-```
-Browser (React + Vite + Tailwind)
-  └── /api/* → FastAPI (uvicorn :8000)
-        ├── /api/auth        — JWT login / signup
-        ├── /api/chat/stream — SSE streaming chat (LangGraph ReAct agent)
-        ├── /api/courses     — NPTEL semantic search (ChromaDB)
-        ├── /api/papers      — arXiv paper search
-        ├── /api/flashcards  — GATE MCQ generation (Gemini)
-        └── /api/collaborate — User similarity matching
+---
 
-LangGraph ReAct Agent
-  ├── LLM: Gemini 3.1 Flash Lite (langchain-google-genai)
-  ├── Memory: MemorySaver (per-user UUID thread_id)
-  └── Tools (via MCP + LangChain):
-        ├── find_nptel_courses    — ChromaDB semantic search
-        ├── search_papers         — arXiv search (research_mcp.py)
-        ├── extract_info          — Full paper metadata (research_mcp.py)
-        ├── search_cached_papers  — In-session ChromaDB paper cache
-        ├── get_transcript        — YouTube transcript (youtube_mcp.py)
-        └── fetch                 — Web content (mcp-server-fetch via uvx)
-```
+<br/>
 
-## Project Structure
+## 🌟 The Core Capabilities
 
-```
-ScholarGen/
-├── backend/
-│   ├── main.py                      # FastAPI app, lifespan, router registration
-│   ├── jwt_utils.py                 # JWT create/decode (48h expiry)
-│   ├── dependencies.py              # get_current_user FastAPI dependency
-│   ├── agent_orchestrator.py        # MCPSessionManager — launches MCP subprocesses
-│   ├── services/
-│   │   └── chatbot_service.py       # Singleton LangGraph agent (init at startup)
-│   ├── routers/
-│   │   ├── auth.py                  # POST /register, POST /login
-│   │   ├── chat.py                  # POST /stream, DELETE /clear
-│   │   ├── courses.py               # GET /search
-│   │   ├── papers.py                # GET /search
-│   │   ├── flashcards.py            # GET /subjects, POST /generate
-│   │   └── collaborate.py           # GET / (user matching)
-│   ├── core/
-│   │   ├── database.py              # SQLite — users + user_profiles (WAL mode)
-│   │   ├── course_retriever.py      # ChromaDB loader + LangChain tool wrapper
-│   │   ├── collaboration.py         # Profile extraction + cosine similarity matching
-│   │   └── flashcards.py            # GATE MCQ generation via Gemini
-│   └── mcp/
-│       ├── research_mcp.py          # FastMCP — arXiv search + ChromaDB paper cache
-│       └── youtube_mcp.py           # FastMCP — YouTube transcript extraction
-├── frontend/
-│   ├── src/
-│   │   ├── api.js                   # API client with SSE parser
-│   │   ├── pages/
-│   │   │   ├── LoginPage.jsx
-│   │   │   └── ChatPage.jsx
-│   │   └── components/
-│   │       ├── Sidebar.jsx          # Tool activity + panel navigation
-│   │       ├── ChatMessage.jsx      # Markdown rendering
-│   │       ├── ChatInput.jsx
-│   │       ├── CoursesPanel.jsx
-│   │       ├── PapersPanel.jsx
-│   │       ├── CollaboratePanel.jsx
-│   │       └── FlashcardModal.jsx
-│   ├── dist/                        # Built output — served by FastAPI at /
-│   └── package.json
-├── Config/
-│   └── .env                         # API keys and secrets (not committed)
-├── Data/
-│   ├── nptel_courses_with_embeddings.xlsx   # Pre-embedded NPTEL catalog
-│   └── scholargen.db                        # SQLite DB (auto-created on first run)
-├── scripts/
-│   └── generate_embeddings.py       # Re-embed NPTEL catalog with Gemini API
-├── requirements.txt
-└── readme.md
+### 1. Organisational Analytics & Skill Heatmaps
+Leadership visibility derived entirely from learning behavior—no manual surveys needed. As employees learn, the **Org Analytics Dashboard** instantly identifies critical skill gaps, average learning velocity, and tracks true capability across the workforce.
+
+<div align="center">
+  <img src="images/org_analytics.png" alt="Org Analytics Dashboard" width="800" style="border-radius: 8px; border: 1px solid #333;" />
+</div>
+
+### 2. Multi-Agent AI Research Assistant
+Not a generic chatbot. The core LangGraph ReAct agent is tethered to **live tools** (NPTEL datasets, arXiv integration, YouTube transcripts, and web fetching). It reasons through queries and structures the optimal curriculum in real-time, completely visible to the user.
+
+<div align="center">
+  <img src="images/hero_chat.png" alt="Multi-Tool LLM Chat" width="800" style="border-radius: 8px; border: 1px solid #333;" />
+</div>
+
+### 3. Real-Time Talent Discovery
+A dense snapshot of your internal capabilities. Discover mentors or project collaborators based on semantically matched skills extracted automatically during the learning process.
+
+<div align="center">
+  <img src="images/skill_matrix.png" alt="Skill Matrix" width="800" style="border-radius: 8px; border: 1px solid #333;" />
+</div>
+
+### 4. Career Intelligence & Internal Mobility
+Map out the leap from *Current Role* to *Target Role*. The engine generates an immediate, structured step-by-step curriculum utilizing semantic searches across internal or verified course catalogs (like NPTEL).
+
+<div align="center">
+  <img src="images/learning_path.png" alt="Learning Path Generation" width="800" style="border-radius: 8px; border: 1px solid #333;" />
+</div>
+
+### 5. Semantic Course & Research Discovery
+The environment caches and queries high-density academic and training material seamlessly.
+
+<div align="center">
+  <img src="images/course_discovery.png" alt="Semantic Search" width="800" style="border-radius: 8px; border: 1px solid #333;" />
+</div>
+
+---
+
+<br/>
+
+## 🏗️ Architecture
+
+UpskillOS utilizes a cascading Fallback LLM Infrastructure guaranteeing maximum uptime.
+
+```mermaid
+graph TD
+    UI[Browser React + Tailwind] --> API[FastAPI Backend :3256]
+    
+    API --> Agent[LangGraph ReAct Agent]
+    
+    Agent --> LLM1[Primary: Azure OpenAI GPT-4o Mini]
+    LLM1 -- Fallback --> LLM2[Secondary: NVIDIA NIM Llama 3]
+    LLM2 -- Fallback --> LLM3[Tertiary: Google Gemini 3.1 Flash]
+
+    Agent --> MCP[MCP Tool Execution]
+    
+    MCP --> T1[ChromaDB: NPTEL Semantic Search]
+    MCP --> T2[FastMCP: arXiv Paper Fetcher]
+    MCP --> T3[FastMCP: YouTube Transcripts]
+    MCP --> T4[uvx Fetch: Web Processing]
+    
+    API --> DB[(SQLite WAL: Behavioural Data & Graph)]
 ```
 
-## Quick Start
+---
+
+<br/>
+
+## 🚀 Quick Start Guide
 
 ### Prerequisites
+- **Python 3.11+**
+- **Node.js 18+**
+- **uv** (Package manager) — required for MCP servers: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
-- Python 3.11+
-- Node.js 18+
-- [`uv`](https://docs.astral.sh/uv/) — required for MCP server management
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-### 1. Clone and install
-
+### 1. Clone & Install
 ```bash
 git clone https://github.com/zeeshanparwez/ScholarGen.git
 cd ScholarGen
 pip install -r requirements.txt
 ```
 
-### 2. Configure environment
-
-Create `Config/.env`:
-
-```env
-GOOGLE_API_KEY=your_google_api_key_here
-JWT_SECRET_KEY=any_random_secret_string
-
-# Optional — defaults shown
-GEMINI_MODEL=gemini-3.1-flash-lite-preview
-COURSE_DATA_PATH=/absolute/path/to/Data/nptel_courses_with_embeddings.xlsx
+### 2. Configure Environment
+Copy the example config and inject your keys.
+```bash
+cp Config/.env.example Config/.env
 ```
+_UpskillOS supports Azure OpenAI (Recommended primary), NVIDIA NIM, Groq, and Google Gemini as LLM routing layers._
 
-Get a free Google API key at [aistudio.google.com](https://aistudio.google.com).
-
-### 3. Build the frontend
-
+### 3. Build the UI
 ```bash
 cd frontend
 npm install
-npm run build   # outputs to frontend/dist/ — served automatically by FastAPI
+npm run build 
 cd ..
 ```
 
-### 4. Run
-
+### 4. Start the Application
+The backend automatically serves the built React app.
 ```bash
-uvicorn backend.main:app --reload --port 8000
+uvicorn backend.main:app --host 0.0.0.0 --port 3256
 ```
+Open [http://localhost:3256](http://localhost:3256).
 
-Open [http://localhost:8000](http://localhost:8000), create an account, and start chatting.
+<br/>
 
-### Development mode (hot-reload on both sides)
-
+### Development Mode (Hot Reloading)
+For engineering extension, run distinct servers:
 ```bash
-# Terminal 1 — backend
-uvicorn backend.main:app --reload --port 8000
+# Terminal 1 — FastAPI
+uvicorn backend.main:app --reload --port 3256
 
-# Terminal 2 — frontend (Vite dev server, proxies /api to :8000)
+# Terminal 2 — Vite Dev Server
 cd frontend && npm run dev
-# Open http://localhost:5173
 ```
 
-## Configuration
+---
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `GOOGLE_API_KEY` | Google AI Studio key (Gemini + Embeddings) | Yes |
-| `JWT_SECRET_KEY` | Any random secret string for JWT signing | Yes |
-| `GEMINI_MODEL` | Gemini model name | No (default: `gemini-3.1-flash-lite-preview`) |
-| `COURSE_DATA_PATH` | Absolute path to NPTEL Excel file | No (auto-detected) |
+<br/>
 
-## SSE Streaming Protocol
+## 🔐 Database & Data Integrity
+The backend strictly isolates the database state. 
+The system utilizes a local **SQLite database configured with WAL (Write-Ahead Logging)** to safely aggregate progress markers, chat bookmarks, and structural profiles locally, without sending PII outside your server infrastructure.
 
-`POST /api/chat/stream` returns `text/event-stream`:
+> [!NOTE]
+> For the CHRO Demonstration, you can optionally inject 50 high-density realistic profiles to populate the analytics dashboards to verify scaling:
+> `python scripts/seed_50_users.py`
 
-```
-data: {"type": "token",     "content": "Hello"}
-data: {"type": "tool_call", "tool": "find_nptel_courses", "status": "start"}
-data: {"type": "tool_call", "tool": "find_nptel_courses", "status": "end"}
-data: {"type": "done"}
-data: {"type": "error",     "content": "..."}
-```
+---
 
-## Example Queries
-
-| Goal | Query |
-|------|-------|
-| Find courses | "Recommend NPTEL courses for deep learning" |
-| Research papers | "Find recent papers on transformer architectures" |
-| Video summary | "Get the transcript from this YouTube lecture: [URL]" |
-| Concept help | "Explain attention mechanism step by step" |
-| Flashcards | Use the Flashcards panel → select GATE branch → generate |
-| Study partners | Use the Collaborate panel to find similar users |
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Backend | FastAPI 0.115, uvicorn, Python 3.11 |
-| Frontend | React 18, Vite 5, Tailwind CSS 3 |
-| Agent | LangGraph 0.6.7, LangChain 0.3.27 |
-| LLM | Google Gemini 3.1 Flash Lite |
-| Vector store | ChromaDB 0.6.3 (in-memory) |
-| MCP tools | FastMCP, mcp-server-fetch (via uvx) |
-| Auth | PyJWT 2.9.0, bcrypt |
-| Database | SQLite (stdlib) — WAL mode |
-| Embeddings | Gemini Embedding API (`gemini-embedding-2-preview`, 768d) |
-
-## Deployment (Free Tier)
-
-Recommended stack: **Render** (backend) + **Vercel** (frontend) + **Supabase** (optional DB)
-
-**Render (backend):**
-- Build command: `pip install -r requirements.txt && cd frontend && npm install && npm run build`
-- Start command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
-- Set env vars: `GOOGLE_API_KEY`, `JWT_SECRET_KEY`
-
-**Vercel (frontend, optional separate deploy):**
-- Build: `npm run build` from `frontend/`
-- Output: `frontend/dist`
-- Set `VITE_API_URL` to your Render backend URL
-
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
+## 📜 License
+MIT License. See [LICENSE](LICENSE) for details.

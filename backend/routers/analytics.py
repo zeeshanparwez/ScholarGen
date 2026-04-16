@@ -55,7 +55,14 @@ def _gemini_fallback(prompt: str, max_tokens: int = 1024) -> str:
 
 
 def _invoke_llm(prompt: str, max_tokens: int = 1024) -> str:
-    """NIM first (with timeout); Gemini with key rotation as fallback."""
+    """Azure OpenAI (primary) → NIM (secondary) → Gemini fallback."""
+    from backend.core.azure_llm import invoke_azure, is_azure_configured
+    if is_azure_configured():
+        try:
+            return invoke_azure(prompt, max_tokens=max_tokens)
+        except Exception as e:
+            logger.warning("Azure OpenAI failed, falling back to NIM: %s", str(e)[:120])
+
     nim_key = os.environ.get("NIM_API_KEY", "")
     if nim_key:
         try:
@@ -97,54 +104,31 @@ def get_skill_matrix(username: str = Depends(get_current_user)):
     Returns an employee × skill grid.
     Response: { skills: [...], employees: [{username, current_role, has: [bool, ...]}, ...] }
     """
-    data = get_analytics_data()
-    learners = data.get("leaderboard", [])
-
-    # Use all learners not just leaderboard top-6 — rebuild from data
-    # The leaderboard is top-6; for skill matrix we need everyone.
-    # We can re-fetch but get_analytics_data already has all learners in leaderboard
-    # So let's expose full learner list via a separate approach — use the full learners
-    # by calling get_analytics_data which returns full skill_gaps context.
-    # For now, use all employees visible in analytics (leaderboard has top 6,
-    # but we want all). Re-build using skill_gaps data plus leaderboard.
-
-    # Actually get_analytics_data returns leaderboard[:6]. We need all employees.
-    # Add a helper that returns all learners.
     import json as _json
-    from backend.core.database import _conn, _DEMO_USERS
-    from datetime import date, timedelta
+    from backend.core.database import _conn
 
-    today = date.today()
+    data = get_analytics_data()
 
     with _conn() as conn:
         real_profiles = conn.execute("SELECT * FROM user_profiles").fetchall()
 
-    real_count = len(real_profiles)
     all_learners = []
+    skill_counter = {}
 
     for row in real_profiles:
+        skills = _json.loads(row["skills"] or "[]")
+        for s in skills:
+            skill_counter[s] = skill_counter.get(s, 0) + 1
+            
         all_learners.append({
             "username":     row["username"],
             "current_role": row["current_role"] or "",
-            "skills":       _json.loads(row["skills"] or "[]"),
-        })
-
-    demo_to_add = _DEMO_USERS if real_count < 5 else _DEMO_USERS[:max(0, 10 - real_count)]
-    for d in demo_to_add:
-        all_learners.append({
-            "username":     d["username"],
-            "current_role": d.get("current_role", ""),
-            "skills":       d["skills"],
+            "skills":       skills,
         })
 
     # Determine top 8 skills by frequency across all employees
-    from collections import Counter
-    skill_counter: Counter = Counter()
-    for emp in all_learners:
-        for s in emp["skills"]:
-            skill_counter[s] += 1
-
-    top_skills = [s for s, _ in skill_counter.most_common(8)]
+    sorted_skills = sorted(skill_counter.items(), key=lambda x: x[1], reverse=True)
+    top_skills = [s for s, _ in sorted_skills[:8]]
 
     # Build matrix rows
     rows = []

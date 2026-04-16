@@ -28,12 +28,13 @@ import PomodoroTimer from '../components/PomodoroTimer'
 import { chat, profile as profileApi } from '../api'
 
 const PROVIDERS = [
-  { id: 'gemini',        label: 'Gemini',    sub: 'gemini-3.1-flash-lite-preview',  color: 'text-blue-600',   tools: true  },
-  { id: 'groq',          label: 'Groq',      sub: 'GPT-OSS 120B',                   color: 'text-emerald-600', tools: false },
-  { id: 'nim',           label: 'NIM',       sub: 'Llama 3.3 70B',                  color: 'text-green-700',  tools: true  },
-  { id: 'nim_llama4',    label: 'NIM',       sub: 'Llama 4 Maverick 17B',           color: 'text-teal-600',   tools: true  },
-  { id: 'nim_deepseek',  label: 'DeepSeek',  sub: 'R1 Distill 32B · reasoning',    color: 'text-purple-600', tools: false },
-  { id: 'nim_qwq',       label: 'QwQ',       sub: 'QwQ-32B · reasoning',            color: 'text-orange-600', tools: false },
+  { id: 'azure',       label: 'Azure OpenAI', sub: 'GPT-4o Mini',                    color: 'text-cyan-600',    tools: true  },
+  { id: 'gemini',      label: 'Gemini',       sub: 'gemini-3.1-flash-lite-preview',  color: 'text-blue-600',    tools: true  },
+  { id: 'groq',        label: 'Groq',         sub: 'GPT-OSS 120B',                   color: 'text-emerald-600', tools: false },
+  { id: 'nim',         label: 'NIM',          sub: 'Llama 3.3 70B',                  color: 'text-green-700',   tools: true  },
+  { id: 'nim_llama4',  label: 'NIM',          sub: 'Llama 4 Maverick 17B',           color: 'text-teal-600',    tools: true  },
+  { id: 'nim_deepseek',label: 'DeepSeek',     sub: 'R1 Distill 32B · reasoning',    color: 'text-purple-600',  tools: false },
+  { id: 'nim_qwq',     label: 'QwQ',          sub: 'QwQ-32B · reasoning',            color: 'text-orange-600',  tools: false },
 ]
 
 const WELCOME = `**Hi! I'm UpskillOS** — your AI-powered upskilling assistant.
@@ -63,7 +64,7 @@ export default function ChatPage() {
   const [activeTools, setActiveTools] = useState([])
   const [runningTools, setRunningTools] = useState(new Set())
   const [provider, setProvider] = useState(
-    () => localStorage.getItem('upskill_provider') || 'gemini'
+    () => localStorage.getItem('upskill_provider') || 'azure'
   )
   const [providerOpen, setProviderOpen] = useState(false)
   const [showPomodoro, setShowPomodoro] = useState(false)

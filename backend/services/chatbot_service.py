@@ -24,6 +24,7 @@ from langgraph.prebuilt import create_react_agent
 from backend.agent_orchestrator import MCPSessionManager
 from backend.core.course_retriever import CourseRetriever, CourseTool
 from backend.core.key_manager import get_all_keys
+from backend.core.azure_llm import get_azure_chat_llm, is_azure_configured
 
 _BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv(os.path.join(_BASE, "Config", ".env"))
@@ -147,6 +148,24 @@ class ChatbotService:
             MessagesPlaceholder(variable_name="messages"),
         ])
 
+        # ── Azure OpenAI agent (PRIMARY — LangGraph ReAct with full tool support) ──
+        azure_prompt = ChatPromptTemplate.from_messages([
+            ("system", SYSTEM_PROMPT),
+            MessagesPlaceholder(variable_name="messages"),
+        ])
+        if is_azure_configured():
+            try:
+                azure_llm = get_azure_chat_llm(temperature=0.0)
+                self._agents["azure"] = create_react_agent(
+                    azure_llm, all_tools, prompt=azure_prompt, checkpointer=self._memory,
+                )
+                self._available_providers.append("azure")
+                logger.info("Azure OpenAI agent ready (deployment: %s)", os.environ.get("AZURE_OPENAI_DEPLOYMENT", ""))
+            except Exception as e:
+                logger.warning("Azure OpenAI agent skipped: %s", e)
+        else:
+            logger.info("Azure OpenAI not configured — skipping (set AZURE_OPENAI_API_KEY + AZURE_OPENAI_ENDPOINT)")
+
         # ── Gemini agent (LangGraph ReAct with all tools) ─────────────────────
         try:
             gemini_llm = _build_gemini_llm()
@@ -231,7 +250,10 @@ class ChatbotService:
         key = f"{provider}:{username}"
         if key not in self._user_threads:
             self._user_threads[key] = str(uuid.uuid4())
-        return {"configurable": {"thread_id": self._user_threads[key]}}
+        return {
+            "configurable": {"thread_id": self._user_threads[key]},
+            "recursion_limit": 80,
+        }
 
     async def stream_chat(
         self, username: str, message: str, provider: str = "gemini"
@@ -265,15 +287,16 @@ class ChatbotService:
     async def _stream_gemini(
         self, username: str, message: str, provider: str
     ) -> AsyncGenerator[str, None]:
-        """Stream via LangGraph ReAct agent (Gemini). Hard 60s timeout."""
+        """Stream via LangGraph ReAct agent (Azure / Gemini / NIM). Hard 60s timeout."""
         if provider not in self._agents:
-            if self._agents:
-                provider = next(iter(self._agents))
-                logger.warning("Provider not available, using %s", provider)
-            else:
+            # Prefer azure → gemini → whatever is available
+            fallback_order = ["azure", "gemini"] + list(self._agents.keys())
+            provider = next((p for p in fallback_order if p in self._agents), None)
+            if provider is None:
                 yield 'data: {"type":"error","content":"No LLM provider available"}\n\n'
                 yield 'data: {"type":"done"}\n\n'
                 return
+            logger.warning("Provider not available, using %s", provider)
 
         agent = self._agents[provider]
         config = self._get_config(username, provider)

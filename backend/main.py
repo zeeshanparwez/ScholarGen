@@ -23,12 +23,8 @@ logging.basicConfig(
 
 from backend.routers import auth, chat, courses, papers, flashcards, collaborate, learningpath, profile, bookmarks, progress, career, analytics
 from backend.services.chatbot_service import chatbot_service
-from backend.core.seeder import seed_demo_users
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    seed_demo_users()          # idempotent — creates demo employees if missing
     await chatbot_service.initialize()
     yield
     await chatbot_service.cleanup()
