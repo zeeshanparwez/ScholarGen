@@ -6,25 +6,27 @@ services:
     dockerContext: .
     envVars:
 
-      # ── Google / Gemini ──────────────────────────────────────────────────────
+      # ── Azure OpenAI (Primary LLM) ────────────────────────────────────────
+      - key: AZURE_OPENAI_API_KEY
+        sync: false
+      - key: AZURE_OPENAI_ENDPOINT
+        sync: false
+      - key: AZURE_OPENAI_DEPLOYMENT
+        sync: false
+      - key: AZURE_OPENAI_API_VERSION
+        value: "2024-02-15-preview"
+      - key: AZURE_OPENAI_MODEL
+        value: gpt-4o-mini
+
+      # ── Google Gemini (Secondary LLM + Embeddings) ────────────────────────
       - key: GOOGLE_API_KEY
-        sync: false                  # paste in Render dashboard
+        sync: false
       - key: GOOGLE_API_KEY_2
         sync: false
       - key: GEMINI_MODEL
         value: gemini-3.1-flash-lite-preview
 
-      # ── Auth ─────────────────────────────────────────────────────────────────
-      - key: JWT_SECRET_KEY
-        sync: false
-
-      # ── Groq ─────────────────────────────────────────────────────────────────
-      - key: GROQ_API_KEY
-        sync: false
-      - key: GROQ_MODEL
-        value: openai/gpt-oss-120b
-
-      # ── NVIDIA NIM ───────────────────────────────────────────────────────────
+      # ── NVIDIA NIM (Tertiary LLM) ─────────────────────────────────────────
       - key: NIM_API_KEY
         sync: false
       - key: NIM_MODEL
@@ -32,7 +34,17 @@ services:
       - key: NIM_BASE_URL
         value: https://integrate.api.nvidia.com/v1
 
-      # ── App config ───────────────────────────────────────────────────────────
+      # ── Groq ──────────────────────────────────────────────────────────────
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: qwen-qwq-32b
+
+      # ── Auth ──────────────────────────────────────────────────────────────
+      - key: JWT_SECRET_KEY
+        sync: false
+
+      # ── App Config ────────────────────────────────────────────────────────
       - key: COURSE_DATA_PATH
         value: /app/Data/nptel_courses_with_embeddings.xlsx
       - key: PYTHONUNBUFFERED
